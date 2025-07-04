@@ -12,5 +12,7 @@ Processing may take some time, depending on the size of your data file. The dial
 
 # Potential future updates
 UI to set processing options.
+
 Trend removal.
+
 Alternate raster generation algorithms.
