@@ -35,7 +35,7 @@ import os.path
 
 
 from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsGeometry, QgsPointXY
-from qgis.core import QgsProject, QgsVectorLayer, QgsField, QgsFeature, QgsRasterLayer, QgsSingleBandGrayRenderer, QgsContrastEnhancement
+from qgis.core import QgsProject, QgsVectorLayer, QgsField, QgsFeature, QgsRasterLayer, QgsSingleBandGrayRenderer, QgsContrastEnhancement, QgsVectorFileWriter, QgsProcessingUtils
 from qgis.PyQt.QtCore import QVariant, QMetaType
 
 from datetime import datetime
@@ -85,6 +85,7 @@ class QuickMag():
 		self.layername = None
 		self.data = None
 		self.filepath = None
+		self.defaultDisplayRange = 3.0	# default layer symbology min/max
 
 	# noinspection PyMethodMayBeStatic
 	def tr(self, message):
@@ -225,81 +226,71 @@ class QuickMag():
 	def processASC(self):
 		self.filepath = self.dlg.quickMagFileInput.filePath()
 		if not self.filepath:
-			# QgsMessageLog.logMessage("no file selected")
 			QMessageBox.warning(None, "Quick Mag Error", "Please select an ASC file to process")
 			return False
 	
-		# QgsMessageLog.logMessage("Processing file: " + filepath)
+		self.pointSpacing = self.dlg.quickMagPointSpacing.value()
 		
 		start = time.time()
-		# self.dlg.quickMagProgress.setText("Loading ASC file...")
-		self.loadASC()
-		# self.dlg.quickMagProgress.setText("Generating IDW raster...")
-		newRaster = self.genIDW()
 		
-		self.updateRasterDisplay( newRaster, -3.0, 3.0 )
+		# process ASC file into vector points
+		self.loadASC()
+		# interpolate raster
+		newRaster = self.genRaster()
+		
+		# update layer symbology to use -3/+3 min max
+		self.updateRasterDisplay( newRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
+		
+		# run high pass filter if required (default on)
+		if self.dlg.quickMagHighPass.isChecked():		
+			highPassRaster = self.runHighPassFilter( newRaster )
+			self.updateRasterDisplay( highPassRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
 		
 		end = time.time()
-		duration = f"{end - start:0.2f}"
-		self.dlg.quickMagProgress.setText("ASC processed and raster generated in: " + duration + "s")
+		print(f"TOTAL DURATION: {end - start:0.2f}s")
+		self.dlg.quickMagProgress.setText(f"ASC processed and raster generated in: {end - start:0.2f}s")
 		
-		
+	
+	# load ASC file, perform median/trend calculations and generate vector points layer with modified values
 	def loadASC(self):
-		
 		start = time.time()
 		print("Loading ASC...")
 		with open( self.filepath ) as csvfile:
 			self.data = list(csv.reader(csvfile, delimiter = "\t"))
-		
 		end = time.time()
-		duration = f"{end - start:0.2f}"
-		print("Duration: " + duration + "s")
+		print(f"Duration: {end - start:0.2f}s")
 		
-		# calculate modified values with median filter
-			# averages[trace, probe] = average(value) grouped by trace, probe
-			# averages[trace] = average(averages[trace, probe])
-			# averageModifier[trace, probe] = average[trace, probe] - traceaverage[trace]
-			# modifiedValue = value + averageModifier[trace, probe]
-			
-		probeAverages = {}
-		traceAverages = {}
-		
+		# perform median/trend calculations grouped by trace and probe
 		start = time.time()
-		print("Calculating line and trace averages...")
+		print("Calculating line medians...")
+		probeMedians = {}
 		# line[3] and line[4] are trace and probe
 		for key, group in groupby( sorted( self.data, key=lambda line: (line[3], line[4]) ), lambda line: (line[3], line[4])):
 			# can't refer to key[0] directly, need to cast to a list first
 			keys = list(key)
-			# print(list(zip(*group))[2])
-			# print(float(list(zip(*group))[2]))
-
-			# if average values for this trace don't exist yet, create them
-			if probeAverages.get(keys[0]) is None:
-				probeAverages[keys[0]] = {}
 			
-			# get average value for probes on this trace
-			probeAverages[keys[0]][keys[1]] = statistics.median( list(map(float, list(zip(*group))[2] ) ) )
+			# if median values for this trace don't exist yet, create empty container
+			if probeMedians.get(keys[0]) is None:
+				probeMedians[keys[0]] = {}
 			
-			# get trace average across probe averages
-			traceAverages[keys[0]] = statistics.mean( probeAverages[keys[0]].values() )
-			
+			# get median value for probes on this trace
+			probeMedians[keys[0]][keys[1]] = statistics.median( list(map(float, list(zip(*group))[2] ) ) )
 		end = time.time()
-		print(f"Duration: {end - start}")
+		print(f"Duration: {end - start:0.2f}s")
 		
+		# generate vector point layer
 		start = time.time()
 		print("Creating point layer...")
 		# get project CRS
 		crsProj = QgsCoordinateReferenceSystem(QgsProject.instance().crs().authid())
 		
-		# split out filename and combine with date time for layer name
+		# split out input ASC filename and combine with date time for layer name
 		filename = os.path.basename( self.filepath )
-		# fileparts = self.filepath.split("/")
 		self.layername = filename + "-" + datetime.now().strftime('%Y-%m-%d %H%M')
 		
 		# create temporary layer( type, name, storage type )
 		vlayer = QgsVectorLayer("Point", self.layername, "memory")
 		vlayer.setCrs(crsProj)
-			
 		pr = vlayer.dataProvider()
 		
 		# create attribute fields in the layer
@@ -312,21 +303,20 @@ class QuickMag():
 						  QgsField("probe", QMetaType.Type.Int)])
 		vlayer.updateFields()
 		end = time.time()
-		print(f"Duration: {end - start}")
+		print(f"Duration: {end - start:0.2f}s")
 		
 		# Sensys ASC files use UTM CRS with the UTM code as the first part of the x value
 		utmVal = 0
 		
-		hack_line_limit = 100
-		hack_line_count = 0
+		# hack_line_limit = 100
+		# hack_line_count = 0
 		lastX = {}
 		lastY = {}
-		pointSpacing = 0.14		# remove points closer together than this (in metres)
 		
 		start = time.time()
 		print("Generating vector points...")
 		# loop through data and create point for each row with modifiedValue
-		# modifiedValue = value + (probeAverages[trace, probe] - traceAverages[trace])
+		# modifiedValue = value + probeMedians[trace, probe]
 		# trendValue needs more complex calculations involving position along line
 		for reading in self.data:
 			# data structure:
@@ -350,21 +340,22 @@ class QuickMag():
 			
 			probeNo = "probe" + reading[4]
 			if probeNo in lastX and probeNo in lastY:
-				# print(f"Testing location {x} vs {lastX} and {y} vs {lastY}")
-				if ((lastX[probeNo] - pointSpacing) <= x <= (lastX[probeNo] + pointSpacing)) and ((lastY[probeNo] - pointSpacing) <= y <= (lastY[probeNo] + pointSpacing)):
+				# skip over points closer together than self.pointSpacing (in metres) along one line
+				if ((lastX[probeNo] - self.pointSpacing) <= x <= (lastX[probeNo] + self.pointSpacing)) and ((lastY[probeNo] - self.pointSpacing) <= y <= (lastY[probeNo] + self.pointSpacing)):
 					# print("Skipping point")
 					continue
 			
+			# store last point position
 			lastX[probeNo] = x
 			lastY[probeNo] = y
 			
-			# magnetic values
+			# actual readings and processed values
 			rawValue = float(reading[2])
-			modifiedValue = rawValue - (probeAverages[reading[3]][reading[4]]) # - traceAverages[reading[3]])
+			modifiedValue = rawValue - probeMedians[reading[3]][reading[4]]
 			trendValue = 0.0
 			
+			# create vector point
 			f = QgsFeature()
-			
 			qPoint = QgsPointXY(x, y)
 			xPoint = crsTransform.transform(qPoint) # coordinate Transform from UTM to project CRS
 			f.setGeometry( QgsGeometry.fromPointXY(xPoint) )
@@ -377,7 +368,7 @@ class QuickMag():
 			# if hack_line_count >= hack_line_limit:
 			#	break
 		end = time.time()
-		print(f"Duration: {end - start}")
+		print(f"Duration: {end - start:0.2f}s")
 		
 		start = time.time()
 		print("Saving layer...")
@@ -385,18 +376,33 @@ class QuickMag():
 		vlayer.updateExtents() 
 		QgsProject.instance().addMapLayer(vlayer)
 		
+		# do not show the points layer by default
 		node = QgsProject.instance().layerTreeRoot().findLayer(vlayer)
 		if node:
 			node.setItemVisibilityChecked(False)
-		end = time.time()
-		print(f"Duration: {end - start}")
-	
-	
-	def genIDW(self, field = 'modifiedValue'):
-		start = time.time()
-		print("Generating IDW raster")
 		
+		# below code is needed to use SAGA multi b-spline algorithm as it doesn't work on a memory layer
+		"""
+		options = QgsVectorFileWriter.SaveVectorOptions()
+		options.driverName = "ESRI Shapefile"
+		QgsVectorFileWriter.writeAsVectorFormatV3(
+			vlayer,
+			r"D:/sensys/test.shp",
+			QgsProject.instance().transformContext(),
+			options
+			)
+		"""
+		end = time.time()
+		print(f"Duration: {end - start:0.2f}s")
+	
+	# function to interpolate raster from vector points layer
+	def genRaster(self, field = 'modifiedValue'):
+		start = time.time()
+		print("Generating raster")
+		
+		# theoretically we can use the currently selected layer
 		if self.layername is None:
+			return False
 			vlayer = self.iface.layerTreeView().currentLayer() # grabs currently selected layer
 		else:
 			vlayer = QgsProject.instance().mapLayersByName(self.layername)[0]
@@ -408,15 +414,16 @@ class QuickMag():
 		ymin = ext.yMinimum()
 		ymax = ext.yMaximum()
 		
-		# apply extra command line option to set cell size at 0.2 x 0.2m
+		# set raster extent and cell size at 0.2 x 0.2m
 		extraOpt = "-tr 0.2 0.2 -txe " + str(xmin) + " " + str(xmax) + " -tye " + str(ymin) + " " + str(ymax)
 		
+		# use IDW interpolation for quick raster generation
 		alg = "gdal:gridinversedistancenearestneighbor"
 		params = {'INPUT':vlayer,
 			'Z_FIELD':field,
 			'POWER':2,
 			'SMOOTHING':0.1,
-			'RADIUS':1.2,
+			'RADIUS':1.5,
 			'MAX_POINTS':20,
 			'MIN_POINTS':0,
 			'NODATA':9999,
@@ -426,17 +433,38 @@ class QuickMag():
 			'OUTPUT':'TEMPORARY_OUTPUT'}
 		
 		results = processing.run( alg, params )
-		rasterLayer = QgsRasterLayer(results['OUTPUT'], "raster-" + self.layername)
-		QgsProject.instance().addMapLayer(rasterLayer)
 		
-		# raster calculator expression: if( heatmap@1 != 9999, layer@1, 9999 )
+		rasterLayer = QgsRasterLayer(results['OUTPUT'], "raster-" + self.layername)
+		QgsProject.instance().addMapLayer(rasterLayer)			
 		
 		end = time.time()
-		print(f"Duration: {end - start}")
+		print(f"Duration: {end - start:0.2f}s")
+		
+		# saga multi b-spline is trickier, doesn't work on memory layer
+		# would also need to be clipped to size using a heatmap raster generated from the same points
+		# raster calculator expression: if( heatmap@1 != 9999, layer@1, 9999 )
+		"""
+		extent = str(xmin) + "," + str(xmax) + "," + str(ymin) + "," + str(ymax) + ""
+		outputfile = os.path.dirname( self.filepath ) + "\\" + "temp.sdat"
+		print(outputfile)
+		
+		alg = "sagang:multilevelbspline"
+		params = {'SHAPES':r"D:/sensys/test.shp",
+			'FIELD':'modifiedVa',
+			'TARGET_USER_SIZE':0.2,
+			'TARGET_USER_FITS':0,
+			'TARGET_OUT_GRID':TEMPORARY_OUTPUT,
+			'METHOD':0,
+			'EPSILON':0.0001,
+			'LEVEL_MAX':11}
+		
+		results = processing.run( alg, params )
+		rasterLayer = QgsRasterLayer(results['TARGET_OUT_GRID'], "raster-" + self.layername)
+		"""
 		
 		return rasterLayer
 	
-	
+	# change raster display to fit in min/max values
 	def updateRasterDisplay( self, layer = None, newMin = -3.0, newMax = 3.0 ):
 		if not layer:
 			layer = iface.layerTreeView().currentLayer()
@@ -451,4 +479,31 @@ class QuickMag():
 		
 		layer.setRenderer(renderer)
 		layer.triggerRepaint()
+		
+		# collapse node on layers list
+		node = QgsProject.instance().layerTreeRoot().findLayer(layer)
+		if node:
+			node.setExpanded(False)
 	
+	# use Whitebox Workflows high pass median filter
+	def runHighPassFilter( self, layer = None ):
+		if not layer:
+			layer = iface.layerTreeView().currentLayer()
+		
+		alg = "wbw:high_pass_median_filter"
+		params = {
+			'inputRaster1':layer,
+			'filter_size_x2':35,
+			'filter_size_y3':35,
+			'sig_digits4':1,
+			'fnOutput':QgsProcessingUtils.generateTempFilename('highpass-output.tif')
+			}
+
+		results = processing.run( alg, params )
+		# print(results)
+		rasterLayer = QgsRasterLayer(results['fnOutput'], "highpass-" + self.layername)
+		QgsProject.instance().addMapLayer(rasterLayer)
+		
+		return rasterLayer
+		
+		
