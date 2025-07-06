@@ -9,10 +9,3 @@ Browse to and select your ASC data file.
 Click Run. The points layer will be generated first, followed by the raster. The latter will be displayed as a greyscale plot at +/- 3 nT.
 
 Processing may take some time, depending on the size of your data file. The dialog will show the total processing time once it is finished.
-
-# Potential future updates
-UI to set processing options.
-
-Trend removal.
-
-Alternate raster generation algorithms.
