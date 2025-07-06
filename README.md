@@ -1,5 +1,5 @@
 # Installing QuickMag
-To install, navigate to your QGIS Python plugin folder and create a new folder "QuickMag". Download all files into that folder.
+To install, navigate to your QGIS Python plugin folder and create a new folder "quick_mag". Download all files into that folder.
 
 In QGIS, you can check that the plugin is installed and enabled via the Plugin Manager. The QuickMag icon will appear on the Plugins Toolbar.
 
