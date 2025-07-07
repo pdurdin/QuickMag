@@ -38,13 +38,15 @@ from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsG
 from qgis.core import QgsProject, QgsVectorLayer, QgsField, QgsFeature, QgsRasterLayer, QgsSingleBandGrayRenderer, QgsContrastEnhancement, QgsVectorFileWriter, QgsProcessingUtils
 from qgis.PyQt.QtCore import QVariant, QMetaType
 
+from math import sqrt
 from datetime import datetime
 import time
 import csv
 from itertools import groupby
 import statistics
 import processing
-		
+
+from numpy.polynomial import Polynomial
 
 class QuickMag():
 	"""QGIS Plugin Implementation."""
@@ -85,7 +87,9 @@ class QuickMag():
 		self.layername = None
 		self.data = None
 		self.filepath = None
+		self.trendRemoval = False		# do not attempt trend removal by default
 		self.defaultDisplayRange = 3.0	# default layer symbology min/max
+		self.pointSpacing = 0.125		# default minimum point spacing in metres
 
 	# noinspection PyMethodMayBeStatic
 	def tr(self, message):
@@ -229,14 +233,15 @@ class QuickMag():
 			QMessageBox.warning(None, "Quick Mag Error", "Please select an ASC file to process")
 			return False
 	
-		self.pointSpacing = self.dlg.quickMagPointSpacing.value()
-		
 		start = time.time()
 		
 		# process ASC file into vector points
 		self.loadASC()
 		# interpolate raster
 		newRaster = self.genRaster()
+		
+		if self.dlg.quickMagTrendRemoval.isChecked():
+			self.trendRemoval = True
 		
 		# update layer symbology to use -3/+3 min max
 		self.updateRasterDisplay( newRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
@@ -275,6 +280,7 @@ class QuickMag():
 			
 			# get median value for probes on this trace
 			probeMedians[keys[0]][keys[1]] = statistics.median( list(map(float, list(zip(*group))[2] ) ) )
+			
 		end = time.time()
 		print(f"Duration: {end - start:0.2f}s")
 		
@@ -316,7 +322,7 @@ class QuickMag():
 		start = time.time()
 		print("Generating vector points...")
 		# loop through data and create point for each row with modifiedValue
-		# modifiedValue = value + probeMedians[trace, probe]
+		# modifiedValue = value - probeMedians[trace, probe]
 		# trendValue needs more complex calculations involving position along line
 		for reading in self.data:
 			# data structure:
@@ -324,8 +330,8 @@ class QuickMag():
 			
 			# get UTM value from initial digits of X coordinate on first line
 			if utmVal == 0:
-				utmVal = int(float(reading[0]) / 1000000)	 # UTM value could be 1 or 2 digits
-				utmCode = int(32600 + utmVal)
+				utmVal = int(float(reading[0]) / 1000000)		# UTM value could be 1 or 2 digits
+				utmCode = int(32600 + utmVal)					# codes for UTM CRS are 326xx
 				
 				# set up transform from UTM to project CRS
 				crsASC = QgsCoordinateReferenceSystem(f"EPSG:{utmCode}")
@@ -334,17 +340,17 @@ class QuickMag():
 				# crs = vlayer.crs()
 				# crs.createFromId(utmCode) # UTM id is 326xx
 				
-			# get proper x/y coordinates
+			# get x/y coordinates as floats with UTMval removed
 			x = float(reading[0]) - (utmVal * 1000000)
 			y = float(reading[1])
 			
 			probeNo = "probe" + reading[4]
 			if probeNo in lastX and probeNo in lastY:
 				# skip over points closer together than self.pointSpacing (in metres) along one line
-				if ((lastX[probeNo] - self.pointSpacing) <= x <= (lastX[probeNo] + self.pointSpacing)) and ((lastY[probeNo] - self.pointSpacing) <= y <= (lastY[probeNo] + self.pointSpacing)):
-					# print("Skipping point")
+				distance = sqrt( (x - lastX[probeNo])**2 + (y - lastY[probeNo])**2 )
+				if distance < self.pointSpacing:
 					continue
-			
+				
 			# store last point position
 			lastX[probeNo] = x
 			lastY[probeNo] = y
@@ -352,6 +358,11 @@ class QuickMag():
 			# actual readings and processed values
 			rawValue = float(reading[2])
 			modifiedValue = rawValue - probeMedians[reading[3]][reading[4]]
+			
+			if self.trendRemoval:
+				# is this done point by point or in group by section?
+				# use polynomial 3
+				pass
 			trendValue = 0.0
 			
 			# create vector point
@@ -414,8 +425,8 @@ class QuickMag():
 		ymin = ext.yMinimum()
 		ymax = ext.yMaximum()
 		
-		# set raster extent and cell size at 0.2 x 0.2m
-		extraOpt = "-tr 0.2 0.2 -txe " + str(xmin) + " " + str(xmax) + " -tye " + str(ymin) + " " + str(ymax)
+		# set raster extent and cell size at 0.125 x 0.125m
+		extraOpt = "-tr 0.125 0.125 -txe " + str(xmin) + " " + str(xmax) + " -tye " + str(ymin) + " " + str(ymax)
 		
 		# use IDW interpolation for quick raster generation
 		alg = "gdal:gridinversedistancenearestneighbor"
@@ -424,7 +435,7 @@ class QuickMag():
 			'POWER':2,
 			'SMOOTHING':0.1,
 			'RADIUS':1.5,
-			'MAX_POINTS':20,
+			'MAX_POINTS':30,
 			'MIN_POINTS':0,
 			'NODATA':9999,
 			'OPTIONS':None,
