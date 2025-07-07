@@ -278,9 +278,22 @@ class QuickMag():
 			if probeMedians.get(keys[0]) is None:
 				probeMedians[keys[0]] = {}
 			
-			# get median value for probes on this trace
-			probeMedians[keys[0]][keys[1]] = statistics.median( list(map(float, list(zip(*group))[2] ) ) )
+			# retrieve values for each line
+			lineValues = list(map(float, list(zip(*group))[2] ) )
+			# get median value for each line
+			probeMedians[keys[0]][keys[1]] = statistics.median( lineValues )
 			
+			if self.trendRemoval:
+				"""
+				for trend removal we need to do a polynomial.fit, plotting position along the line
+					against raw value, and then subtract the ...coefficient??
+				can we do this here in the group by or do we need to do it against each point individually?
+				"""
+				# linePosition = sqrt( (x - firstX)**2 + (y - firstY)**2 )
+				# Polynomial.fit( linePosition, lineValues, deg=3 )
+				# trendValue = ???
+				pass
+				
 		end = time.time()
 		print(f"Duration: {end - start:0.2f}s")
 		
@@ -318,6 +331,13 @@ class QuickMag():
 		# hack_line_count = 0
 		lastX = {}
 		lastY = {}
+		"""
+		firstX = {}
+		firstY = {}			# 
+		linePosition = 0	# distance of point along line
+		lastTrace = None
+		lastProbe = None
+		"""
 		
 		start = time.time()
 		print("Generating vector points...")
@@ -346,23 +366,31 @@ class QuickMag():
 			
 			probeNo = "probe" + reading[4]
 			if probeNo in lastX and probeNo in lastY:
-				# skip over points closer together than self.pointSpacing (in metres) along one line
+				# skip over points closer together than self.pointSpacing (in metres) along one line.
+				# This reduces processing time considerably, and mainly accounts for the machine being
+				# pushed with speed settings intended for towing at higher speed!
 				distance = sqrt( (x - lastX[probeNo])**2 + (y - lastY[probeNo])**2 )
 				if distance < self.pointSpacing:
 					continue
-				
-			# store last point position
+			
+			# last stored point position
 			lastX[probeNo] = x
 			lastY[probeNo] = y
+			
+			"""
+			# if this is the first point on the line, store as firstX/Y for trend removal purposes
+			if reading[3] != lastTrace or reading[4] != lastProbe:
+				firstX[probeNo] = x
+				firstY[probeNo] = y
+				lastTrace = reading[3]
+				lastProbe = reading[4]
+			"""
 			
 			# actual readings and processed values
 			rawValue = float(reading[2])
 			modifiedValue = rawValue - probeMedians[reading[3]][reading[4]]
 			
-			if self.trendRemoval:
-				# is this done point by point or in group by section?
-				# use polynomial 3
-				pass
+			# this needs to be calculated!
 			trendValue = 0.0
 			
 			# create vector point
