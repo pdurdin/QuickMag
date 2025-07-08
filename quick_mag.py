@@ -316,7 +316,7 @@ class QuickMag():
 		pr.addAttributes([QgsField("x", QMetaType.Type.Double),
 						  QgsField("y", QMetaType.Type.Double),
 						  QgsField("rawValue", QMetaType.Type.Double),
-						  QgsField("modifiedValue", QMetaType.Type.Double),
+						  QgsField("medianValue", QMetaType.Type.Double),
 						  QgsField("trendValue", QMetaType.Type.Double),
 						  QgsField("trace", QMetaType.Type.QString),
 						  QgsField("probe", QMetaType.Type.Int)])
@@ -341,8 +341,8 @@ class QuickMag():
 		
 		start = time.time()
 		print("Generating vector points...")
-		# loop through data and create point for each row with modifiedValue
-		# modifiedValue = value - probeMedians[trace, probe]
+		# loop through data and create point for each row with medianValue
+		# medianValue = value - probeMedians[trace, probe]
 		# trendValue needs more complex calculations involving position along line
 		for reading in self.data:
 			# data structure:
@@ -388,7 +388,7 @@ class QuickMag():
 			
 			# actual readings and processed values
 			rawValue = float(reading[2])
-			modifiedValue = rawValue - probeMedians[reading[3]][reading[4]]
+			medianValue = rawValue - probeMedians[reading[3]][reading[4]]
 			
 			# this needs to be calculated!
 			trendValue = 0.0
@@ -400,7 +400,7 @@ class QuickMag():
 			f.setGeometry( QgsGeometry.fromPointXY(xPoint) )
 			
 			# f.setGeometry(QgsGeometry.fromPointXY(QgsPointXY( x, y )))
-			f.setAttributes([x, y, rawValue, modifiedValue, trendValue, reading[3], reading[4]])
+			f.setAttributes([x, y, rawValue, medianValue, trendValue, reading[3], reading[4]])
 			pr.addFeature(f)
 			
 			# hack_line_count += 1
@@ -435,7 +435,7 @@ class QuickMag():
 		print(f"Duration: {end - start:0.2f}s")
 	
 	# function to interpolate raster from vector points layer
-	def genRaster(self, field = 'modifiedValue'):
+	def genRaster(self, field = 'medianValue'):
 		start = time.time()
 		print("Generating raster")
 		
