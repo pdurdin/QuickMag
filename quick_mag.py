@@ -92,6 +92,7 @@ class QuickMag():
 		self.defaultDisplayRange = 3.0	# default layer symbology min/max
 		self.pointSpacing = 0.125		# default minimum point spacing in metres
 		self.trendPercentile = 10		# default percentile to exclude from trend calculations
+		self.trendDegree = 2			# default nth degree for polynomial fit
 
 	# noinspection PyMethodMayBeStatic
 	def tr(self, message):
@@ -240,6 +241,7 @@ class QuickMag():
 		if self.dlg.quickMagTrendRemoval.isChecked():
 			self.trendRemoval = True
 			self.trendPercentile = self.dlg.quickMagTrendPercentile.value()
+			self.trendDegree = self.dlg.quickMagTrendDegree.value()
 			
 		# process ASC file into vector points
 		self.loadASC()
@@ -382,7 +384,7 @@ class QuickMag():
 				trendThresholdMin = percentile( lineRawValues, self.trendPercentile )
 				trendThresholdMax = percentile( lineRawValues, 100 - self.trendPercentile )
 				
-				# to add a threshold for ignoring, add a filtering function here
+				# filter values to exclude extreme high and low readings from the polynomial calculation
 				def filterTrendValues( linePositions, lineRawValues ):
 					filteredLinePositions = []
 					filteredRawValues = []
@@ -399,7 +401,7 @@ class QuickMag():
 					filteredLinePositions, filteredRawValues = linePositions, lineRawValues
 				
 				# second order polynomial appears to work well on most data with trends
-				trendCoeffs = polyfit(filteredLinePositions, filteredRawValues, deg=2)
+				trendCoeffs = polyfit(filteredLinePositions, filteredRawValues, deg=self.trendDegree)
 				trendValues = polyval(linePositions, trendCoeffs)
 				for i, reading in enumerate(group):
 					reading[7] = lineRawValues[i] - trendValues[i]
