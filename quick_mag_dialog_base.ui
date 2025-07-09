@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>389</width>
-    <height>189</height>
+    <height>219</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -36,7 +36,7 @@
    <property name="geometry">
     <rect>
      <x>180</x>
-     <y>140</y>
+     <y>170</y>
      <width>91</width>
      <height>31</height>
     </rect>
@@ -55,7 +55,7 @@
    <property name="geometry">
     <rect>
      <x>280</x>
-     <y>140</y>
+     <y>170</y>
      <width>91</width>
      <height>31</height>
     </rect>
@@ -64,7 +64,7 @@
     <string>Close</string>
    </property>
   </widget>
-  <widget class="QLabel" name="quickMagProgress">
+  <widget class="QLabel" name="quickMagProgressLabel">
    <property name="geometry">
     <rect>
      <x>20</x>
@@ -90,7 +90,7 @@
    <property name="geometry">
     <rect>
      <x>20</x>
-     <y>110</y>
+     <y>140</y>
      <width>351</width>
      <height>21</height>
     </rect>
@@ -107,12 +107,50 @@
     <rect>
      <x>20</x>
      <y>80</y>
-     <width>351</width>
+     <width>151</width>
      <height>21</height>
     </rect>
    </property>
    <property name="text">
     <string>Apply trend removal</string>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+  </widget>
+  <widget class="QLabel" name="quickMagPercentileLabel">
+   <property name="geometry">
+    <rect>
+     <x>80</x>
+     <y>110</y>
+     <width>291</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Percentile to exclude from trend calculation</string>
+   </property>
+  </widget>
+  <widget class="QSpinBox" name="quickMagTrendPercentile">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>110</y>
+     <width>51</width>
+     <height>22</height>
+    </rect>
+   </property>
+   <property name="minimum">
+    <number>1</number>
+   </property>
+   <property name="maximum">
+    <number>49</number>
+   </property>
+   <property name="singleStep">
+    <number>5</number>
+   </property>
+   <property name="value">
+    <number>10</number>
    </property>
   </widget>
  </widget>

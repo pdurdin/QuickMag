@@ -8,7 +8,7 @@
 							  -------------------
 		begin				 : 2025-06-28
 		git sha				 : $Format:%H$
-		copyright			 : (C) 2025 by P Durdin
+		copyright			 : (C) 2025 by P Durdin and A Durdin
 		email				 : pdurdin@gmail.com
  ***************************************************************************/
 
@@ -46,7 +46,8 @@ from itertools import groupby
 import statistics
 import processing
 
-from numpy.polynomial import Polynomial
+from numpy.polynomial.polynomial import polyfit, polyval
+from numpy import percentile
 
 class QuickMag():
 	"""QGIS Plugin Implementation."""
@@ -90,6 +91,7 @@ class QuickMag():
 		self.trendRemoval = False		# do not attempt trend removal by default
 		self.defaultDisplayRange = 3.0	# default layer symbology min/max
 		self.pointSpacing = 0.125		# default minimum point spacing in metres
+		self.trendPercentile = 10		# default percentile to exclude from trend calculations
 
 	# noinspection PyMethodMayBeStatic
 	def tr(self, message):
@@ -234,14 +236,15 @@ class QuickMag():
 			return False
 	
 		start = time.time()
-		
+
+		if self.dlg.quickMagTrendRemoval.isChecked():
+			self.trendRemoval = True
+			self.trendPercentile = self.dlg.quickMagTrendPercentile.value()
+			
 		# process ASC file into vector points
 		self.loadASC()
 		# interpolate raster
-		newRaster = self.genRaster()
-		
-		if self.dlg.quickMagTrendRemoval.isChecked():
-			self.trendRemoval = True
+		newRaster = self.genRaster( field="medianValue", namePrefix="raster" )
 		
 		# update layer symbology to use -3/+3 min max
 		self.updateRasterDisplay( newRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
@@ -251,48 +254,157 @@ class QuickMag():
 			highPassRaster = self.runHighPassFilter( newRaster )
 			self.updateRasterDisplay( highPassRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
 		
+		if self.trendRemoval:
+			trendRaster = self.genRaster( field="trendValue", namePrefix="trend" )
+			self.updateRasterDisplay( trendRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
+			if self.dlg.quickMagHighPass.isChecked():		
+				trendHighPassRaster = self.runHighPassFilter( trendRaster )
+				self.updateRasterDisplay( trendHighPassRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
+		
 		end = time.time()
 		print(f"TOTAL DURATION: {end - start:0.2f}s")
-		self.dlg.quickMagProgress.setText(f"ASC processed and raster generated in: {end - start:0.2f}s")
+		self.dlg.quickMagProgressLabel.setText(f"ASC processed and raster generated in: {end - start:0.2f}s")
 		
 	
 	# load ASC file, perform median/trend calculations and generate vector points layer with modified values
 	def loadASC(self):
+		# Sensys ASC files use UTM CRS with the UTM code as the first part of the x value
+		# We will extract the UTM code from the first X coordinate, and assume it is the same for every other X coordinate.
+		self.utmVal = 0
+		self.utmCode = 0
+		self.crsASC = None
+		self.csrTransform = None
+
+		self.data = []
+
+		# read from file:
+		#	0              1       2         3          4
+		#	CoordXWithUTM, CoordY, rawValue, traceName, probeNumber
+		#
+		# converted "reading" in self.data, which will be sorted by traceAndProbe:
+		#
+		#   0              1       2         3          4            5              6                   7
+		# 	CoordX,        CoordY, rawValue, traceName, probeNumber, traceAndProbe, medianRemovedValue, trendRemovedValue
+		#   float          float   float     str        str          tuple          float               float
+
+		def convertCoords(rawCoordX, rawCoordY):
+			rawCoordX = float(rawCoordX)
+			if self.utmVal == 0:
+				self.utmVal = int(rawCoordX / 1000000)		# UTM value could be 1 or 2 digits
+				self.utmCode = int(32600 + self.utmVal)		# codes for UTM CRS are 326xx
+			# get x/y coordinates as floats with UTMval removed
+			x = rawCoordX - (self.utmVal * 1000000)
+			y = float(rawCoordY)
+			return (x, y)
+
+		def convertRawLine(rawLine):
+			x, y = convertCoords(rawLine[0], rawLine[1])
+			rawValue = float(rawLine[2])
+			traceName, probeNumber = rawLine[3], rawLine[4]
+			traceAndProbe = (traceName, probeNumber)
+			# Return a list rather than a tuple so we can fill in the new columns later.
+			return [x, y, rawValue, traceName, probeNumber, traceAndProbe, 0.0, 0.0]
+
+		def getTraceAndProbe(reading):
+			# reading[5] is traceAndProbe
+			return reading[5]
+
+		# traceAndProbe -> (x, y)
+		lastCoords = {}
+
+		def shouldKeepThisLine(reading):
+			traceAndProbe = getTraceAndProbe(reading)
+			x, y = reading[0], reading[1]
+			keep = True
+			lastCoordPair = lastCoords.get(traceAndProbe, None)
+			if lastCoordPair is not None:
+				lastX, lastY = lastCoordPair
+				# skip over points closer together than self.pointSpacing (in metres) along one line.
+				# This reduces processing time considerably, and mainly accounts for the machine being
+				# pushed with speed settings intended for towing at higher speed!
+				distance = sqrt( (x - lastX)**2 + (y - lastY)**2 )
+				if distance < self.pointSpacing:
+					keep = False
+			# Remember the last point we kept for the next distance comparison
+			if keep:
+				lastCoords[traceAndProbe] = (x, y)
+			return keep
+
 		start = time.time()
 		print("Loading ASC...")
+
 		with open( self.filepath ) as csvfile:
-			self.data = list(csv.reader(csvfile, delimiter = "\t"))
+			rawLines = csv.reader(csvfile, delimiter = "\t")
+			self.data = list( filter(shouldKeepThisLine, map(convertRawLine, rawLines) ) )
+		self.data.sort(key=getTraceAndProbe)
+
 		end = time.time()
 		print(f"Duration: {end - start:0.2f}s")
 		
 		# perform median/trend calculations grouped by trace and probe
 		start = time.time()
-		print("Calculating line medians...")
-		probeMedians = {}
-		# line[3] and line[4] are trace and probe
-		for key, group in groupby( sorted( self.data, key=lambda line: (line[3], line[4]) ), lambda line: (line[3], line[4])):
-			# can't refer to key[0] directly, need to cast to a list first
-			keys = list(key)
+		if self.trendRemoval:
+			print("Calculating line medians and trend correction...")
+		else:
+			print("Calculating line medians...")
+		# reading[3] and reading[4] are trace and probe
+		for traceAndProbe, group in groupby(self.data, getTraceAndProbe):
+			# We need to process the group twice: once to aggregate data, once to store the adjusted values.
+			# So it needs to be a list, not just an iterable.
+			group = list(group)
+
+			# Pivot the group from a list of rows into a list of columns.
+			groupColumns = list( zip(*group) )
+
+			# Extract the rawValue column
+			lineRawValues = groupColumns[2]
+			# get median value for each group
+			median = statistics.median( lineRawValues )
 			
-			# if median values for this trace don't exist yet, create empty container
-			if probeMedians.get(keys[0]) is None:
-				probeMedians[keys[0]] = {}
-			
-			# retrieve values for each line
-			lineValues = list(map(float, list(zip(*group))[2] ) )
-			# get median value for each line
-			probeMedians[keys[0]][keys[1]] = statistics.median( lineValues )
+			# 'group' contains references to the same reading-lists that convertRawLine() created, so we
+			# can change each of these reading-lists here.
+			for reading in group:
+				rawValue = reading[2]
+				reading[6] = rawValue - median
 			
 			if self.trendRemoval:
-				"""
-				for trend removal we need to do a polynomial.fit, plotting position along the line
-					against raw value, and then subtract the ...coefficient??
-				can we do this here in the group by or do we need to do it against each point individually?
-				"""
-				# linePosition = sqrt( (x - firstX)**2 + (y - firstY)**2 )
-				# Polynomial.fit( linePosition, lineValues, deg=3 )
-				# trendValue = ???
-				pass
+				# store position of first reading in the line
+				firstX, firstY = (group[0][0], group[0][1])
+				
+				# get position of reading along the line
+				def getLinePosition(reading):
+					x, y = (reading[0], reading[1])
+					return sqrt( (x - firstX)**2 + (y - firstY)**2 )
+
+				linePositions = list(map(getLinePosition, group))
+				
+				
+				# get threshold for trend removal
+				trendThresholdMin = percentile( lineRawValues, self.trendPercentile )
+				trendThresholdMax = percentile( lineRawValues, 100 - self.trendPercentile )
+				
+				# to add a threshold for ignoring, add a filtering function here
+				# try excluding anything outside 2 standard deviations?
+				def filterTrendValues( linePositions, lineRawValues ):
+					filteredLinePositions = []
+					filteredRawValues = []
+					for position, rawValue in zip( linePositions, lineRawValues ):
+						if trendThresholdMin <= rawValue <= trendThresholdMax:
+							filteredLinePositions.append( position )
+							filteredRawValues.append( rawValue )
+							# print(f"Excluding value {rawValue}")
+					return ( filteredLinePositions, filteredRawValues )
+				
+				# don't bother trying to do trend calculations on less than 8 readings!
+				if len(linePositions) > 8:
+					filteredLinePositions, filteredRawValues = filterTrendValues( linePositions, lineRawValues )
+				else:
+					filteredLinePositions, filteredRawValues = linePositions, lineRawValues
+					
+				trendCoeffs = polyfit(filteredLinePositions, filteredRawValues, deg=2)
+				trendValues = polyval(linePositions, trendCoeffs)
+				for i, reading in enumerate(group):
+					reading[7] = lineRawValues[i] - trendValues[i]
 				
 		end = time.time()
 		print(f"Duration: {end - start:0.2f}s")
@@ -313,31 +425,22 @@ class QuickMag():
 		pr = vlayer.dataProvider()
 		
 		# create attribute fields in the layer
-		pr.addAttributes([QgsField("x", QMetaType.Type.Double),
-						  QgsField("y", QMetaType.Type.Double),
-						  QgsField("rawValue", QMetaType.Type.Double),
-						  QgsField("medianValue", QMetaType.Type.Double),
-						  QgsField("trendValue", QMetaType.Type.Double),
-						  QgsField("trace", QMetaType.Type.QString),
-						  QgsField("probe", QMetaType.Type.Int)])
+		pr.addAttributes([
+			QgsField("x", QMetaType.Type.Double),
+			QgsField("y", QMetaType.Type.Double),
+			QgsField("rawValue", QMetaType.Type.Double),
+			QgsField("trace", QMetaType.Type.QString),
+			QgsField("probe", QMetaType.Type.Int),
+			QgsField("medianValue", QMetaType.Type.Double),
+			QgsField("trendValue", QMetaType.Type.Double)
+			])
 		vlayer.updateFields()
 		end = time.time()
 		print(f"Duration: {end - start:0.2f}s")
 		
-		# Sensys ASC files use UTM CRS with the UTM code as the first part of the x value
-		utmVal = 0
-		
-		# hack_line_limit = 100
-		# hack_line_count = 0
-		lastX = {}
-		lastY = {}
-		"""
-		firstX = {}
-		firstY = {}			# 
-		linePosition = 0	# distance of point along line
-		lastTrace = None
-		lastProbe = None
-		"""
+		# set up transform from UTM to project CRS
+		self.crsASC = QgsCoordinateReferenceSystem(f"EPSG:{self.utmCode}")
+		self.crsTransform = QgsCoordinateTransform(self.crsASC, crsProj, QgsProject.instance())
 		
 		start = time.time()
 		print("Generating vector points...")
@@ -348,18 +451,7 @@ class QuickMag():
 			# data structure:
 			#	['30568506.443', '5659862.034', '-0.5', 'L1_20250122-120324_GZ.prm', '1']
 			
-			# get UTM value from initial digits of X coordinate on first line
-			if utmVal == 0:
-				utmVal = int(float(reading[0]) / 1000000)		# UTM value could be 1 or 2 digits
-				utmCode = int(32600 + utmVal)					# codes for UTM CRS are 326xx
-				
-				# set up transform from UTM to project CRS
-				crsASC = QgsCoordinateReferenceSystem(f"EPSG:{utmCode}")
-				crsTransform = QgsCoordinateTransform(crsASC, crsProj, QgsProject.instance())
-				
-				# crs = vlayer.crs()
-				# crs.createFromId(utmCode) # UTM id is 326xx
-				
+			"""
 			# get x/y coordinates as floats with UTMval removed
 			x = float(reading[0]) - (utmVal * 1000000)
 			y = float(reading[1])
@@ -377,35 +469,32 @@ class QuickMag():
 			lastX[probeNo] = x
 			lastY[probeNo] = y
 			
-			"""
-			# if this is the first point on the line, store as firstX/Y for trend removal purposes
-			if reading[3] != lastTrace or reading[4] != lastProbe:
-				firstX[probeNo] = x
-				firstY[probeNo] = y
-				lastTrace = reading[3]
-				lastProbe = reading[4]
-			"""
-			
 			# actual readings and processed values
 			rawValue = float(reading[2])
 			medianValue = rawValue - probeMedians[reading[3]][reading[4]]
 			
 			# this needs to be calculated!
 			trendValue = 0.0
+			"""
 			
 			# create vector point
 			f = QgsFeature()
-			qPoint = QgsPointXY(x, y)
-			xPoint = crsTransform.transform(qPoint) # coordinate Transform from UTM to project CRS
+			qPoint = QgsPointXY(reading[0], reading[1])
+			xPoint = self.crsTransform.transform(qPoint) # coordinate Transform from UTM to project CRS
 			f.setGeometry( QgsGeometry.fromPointXY(xPoint) )
 			
 			# f.setGeometry(QgsGeometry.fromPointXY(QgsPointXY( x, y )))
-			f.setAttributes([x, y, rawValue, medianValue, trendValue, reading[3], reading[4]])
+			f.setAttributes([
+				reading[0],
+				reading[1],
+				reading[2],
+				reading[3],
+				reading[4],
+				reading[6],
+				reading[7]
+				])
 			pr.addFeature(f)
 			
-			# hack_line_count += 1
-			# if hack_line_count >= hack_line_limit:
-			#	break
 		end = time.time()
 		print(f"Duration: {end - start:0.2f}s")
 		
@@ -435,7 +524,7 @@ class QuickMag():
 		print(f"Duration: {end - start:0.2f}s")
 	
 	# function to interpolate raster from vector points layer
-	def genRaster(self, field = 'medianValue'):
+	def genRaster(self, field = 'medianValue', namePrefix=''):
 		start = time.time()
 		print("Generating raster")
 		
@@ -473,7 +562,7 @@ class QuickMag():
 		
 		results = processing.run( alg, params )
 		
-		rasterLayer = QgsRasterLayer(results['OUTPUT'], "raster-" + self.layername)
+		rasterLayer = QgsRasterLayer(results['OUTPUT'], namePrefix + "-" + self.layername)
 		QgsProject.instance().addMapLayer(rasterLayer)			
 		
 		end = time.time()
