@@ -378,13 +378,11 @@ class QuickMag():
 
 				linePositions = list(map(getLinePosition, group))
 				
-				
 				# get threshold for trend removal
 				trendThresholdMin = percentile( lineRawValues, self.trendPercentile )
 				trendThresholdMax = percentile( lineRawValues, 100 - self.trendPercentile )
 				
 				# to add a threshold for ignoring, add a filtering function here
-				# try excluding anything outside 2 standard deviations?
 				def filterTrendValues( linePositions, lineRawValues ):
 					filteredLinePositions = []
 					filteredRawValues = []
@@ -392,15 +390,15 @@ class QuickMag():
 						if trendThresholdMin <= rawValue <= trendThresholdMax:
 							filteredLinePositions.append( position )
 							filteredRawValues.append( rawValue )
-							# print(f"Excluding value {rawValue}")
 					return ( filteredLinePositions, filteredRawValues )
 				
-				# don't bother trying to do trend calculations on less than 8 readings!
-				if len(linePositions) > 8:
+				# don't bother trying to do trend calculations on less than 40 readings (roughly 5 metres)!
+				if len(linePositions) > 40:
 					filteredLinePositions, filteredRawValues = filterTrendValues( linePositions, lineRawValues )
 				else:
 					filteredLinePositions, filteredRawValues = linePositions, lineRawValues
-					
+				
+				# second order polynomial appears to work well on most data with trends
 				trendCoeffs = polyfit(filteredLinePositions, filteredRawValues, deg=2)
 				trendValues = polyval(linePositions, trendCoeffs)
 				for i, reading in enumerate(group):
