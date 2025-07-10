@@ -85,7 +85,8 @@ class QuickMag():
 		self.first_start = None
 		
 		# create variables
-		self.layername = None
+		self.layerName = None
+		self.layerGroup = None
 		self.data = None
 		self.filepath = None
 		self.trendRemoval = False		# do not attempt trend removal by default
@@ -235,32 +236,42 @@ class QuickMag():
 		if not self.filepath:
 			QMessageBox.warning(None, "Quick Mag Error", "Please select an ASC file to process")
 			return False
-	
+		
+		# split out input ASC filename and combine with date time for group and layer names
+		filename = os.path.basename( self.filepath )
+		self.layerName = os.path.splitext( filename )[0]
+		
+		# create layer group for results
+		root = QgsProject.instance().layerTreeRoot()
+		groupName = self.layerName + "-" + datetime.now().strftime('%Y-%m-%d %H:%M')
+		self.layerGroup = root.addGroup( groupName )
+		
 		start = time.time()
 
 		if self.dlg.quickMagTrendRemoval.isChecked():
 			self.trendRemoval = True
 			self.trendPercentile = self.dlg.quickMagTrendPercentile.value()
 			self.trendDegree = self.dlg.quickMagTrendDegree.value()
-			
+		
 		# process ASC file into vector points
 		self.loadASC()
+		
 		# interpolate raster
-		newRaster = self.genRaster( field="medianValue", namePrefix="raster" )
+		newRaster = self.genRaster( field="medianValue", namePrefix="median" )
 		
 		# update layer symbology to use -3/+3 min max
 		self.updateRasterDisplay( newRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
 		
 		# run high pass filter if required (default on)
 		if self.dlg.quickMagHighPass.isChecked():		
-			highPassRaster = self.runHighPassFilter( newRaster )
+			highPassRaster = self.runHighPassFilter( newRaster, namePrefix="median" )
 			self.updateRasterDisplay( highPassRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
 		
 		if self.trendRemoval:
 			trendRaster = self.genRaster( field="trendValue", namePrefix="trend" )
 			self.updateRasterDisplay( trendRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
 			if self.dlg.quickMagHighPass.isChecked():		
-				trendHighPassRaster = self.runHighPassFilter( trendRaster )
+				trendHighPassRaster = self.runHighPassFilter( trendRaster, namePrefix="trend" )
 				self.updateRasterDisplay( trendHighPassRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
 		
 		end = time.time()
@@ -415,12 +426,8 @@ class QuickMag():
 		# get project CRS
 		crsProj = QgsCoordinateReferenceSystem(QgsProject.instance().crs().authid())
 		
-		# split out input ASC filename and combine with date time for layer name
-		filename = os.path.basename( self.filepath )
-		self.layername = filename + "-" + datetime.now().strftime('%Y-%m-%d %H%M')
-		
 		# create temporary layer( type, name, storage type )
-		vlayer = QgsVectorLayer("Point", self.layername, "memory")
+		vlayer = QgsVectorLayer("Point", self.layerName, "memory")
 		vlayer.setCrs(crsProj)
 		pr = vlayer.dataProvider()
 		
@@ -502,7 +509,10 @@ class QuickMag():
 		print("Saving layer...")
 		# update layer extent and add it to the map
 		vlayer.updateExtents() 
-		QgsProject.instance().addMapLayer(vlayer)
+		
+		QgsProject.instance().addMapLayer(vlayer, False)
+		
+		self.layerGroup.addLayer(vlayer)
 		
 		# do not show the points layer by default
 		node = QgsProject.instance().layerTreeRoot().findLayer(vlayer)
@@ -529,11 +539,11 @@ class QuickMag():
 		print("Generating raster")
 		
 		# theoretically we can use the currently selected layer
-		if self.layername is None:
+		if self.layerName is None:
 			return False
 			vlayer = self.iface.layerTreeView().currentLayer() # grabs currently selected layer
 		else:
-			vlayer = QgsProject.instance().mapLayersByName(self.layername)[0]
+			vlayer = QgsProject.instance().mapLayersByName(self.layerName)[0]
 		
 		# get points layer extent to allow raster resolution calculation
 		ext = vlayer.extent()
@@ -562,8 +572,10 @@ class QuickMag():
 		
 		results = processing.run( alg, params )
 		
-		rasterLayer = QgsRasterLayer(results['OUTPUT'], namePrefix + "-" + self.layername)
-		QgsProject.instance().addMapLayer(rasterLayer)			
+		rasterLayer = QgsRasterLayer(results['OUTPUT'], namePrefix + "-" + self.layerName)
+		QgsProject.instance().addMapLayer(rasterLayer, False)
+		
+		self.layerGroup.addLayer( rasterLayer )
 		
 		end = time.time()
 		print(f"Duration: {end - start:0.2f}s")
@@ -584,10 +596,10 @@ class QuickMag():
 			'TARGET_OUT_GRID':TEMPORARY_OUTPUT,
 			'METHOD':0,
 			'EPSILON':0.0001,
-			'LEVEL_MAX':11}
+			'LEVEL_MAX':12}
 		
 		results = processing.run( alg, params )
-		rasterLayer = QgsRasterLayer(results['TARGET_OUT_GRID'], "raster-" + self.layername)
+		rasterLayer = QgsRasterLayer(results['TARGET_OUT_GRID'], "raster-" + self.layerName)
 		"""
 		
 		return rasterLayer
@@ -614,7 +626,7 @@ class QuickMag():
 			node.setExpanded(False)
 	
 	# use Whitebox Workflows high pass median filter
-	def runHighPassFilter( self, layer = None ):
+	def runHighPassFilter( self, layer = None, namePrefix = '' ):
 		if not layer:
 			layer = iface.layerTreeView().currentLayer()
 		
@@ -629,8 +641,10 @@ class QuickMag():
 
 		results = processing.run( alg, params )
 		# print(results)
-		rasterLayer = QgsRasterLayer(results['fnOutput'], "highpass-" + self.layername)
-		QgsProject.instance().addMapLayer(rasterLayer)
+		rasterLayer = QgsRasterLayer(results['fnOutput'], "highpass-" + namePrefix + "-" + self.layerName)
+		QgsProject.instance().addMapLayer(rasterLayer, False)
+		
+		self.layerGroup.addLayer( rasterLayer )
 		
 		return rasterLayer
 		
