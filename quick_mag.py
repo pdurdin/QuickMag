@@ -94,6 +94,7 @@ class QuickMag():
 		self.pointSpacing = 0.125		# default minimum point spacing in metres
 		self.trendPercentile = 10		# default percentile to exclude from trend calculations
 		self.trendDegree = 2			# default nth degree for polynomial fit
+		self.highPassSize = 35			# default high pass filter size
 
 	# noinspection PyMethodMayBeStatic
 	def tr(self, message):
@@ -264,6 +265,10 @@ class QuickMag():
 		
 		# run high pass filter if required (default on)
 		if self.dlg.quickMagHighPass.isChecked():		
+			self.highPassSize = self.dlg.quickMaghighPassSize.value()
+			if self.highPassSize % 2 == 0:
+				self.highPassSize -= 1
+			
 			highPassRaster = self.runHighPassFilter( newRaster, namePrefix="median" )
 			self.updateRasterDisplay( highPassRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
 		
@@ -633,15 +638,15 @@ class QuickMag():
 		alg = "wbw:high_pass_median_filter"
 		params = {
 			'inputRaster1':layer,
-			'filter_size_x2':35,
-			'filter_size_y3':35,
+			'filter_size_x2':self.highPassSize,
+			'filter_size_y3':self.highPassSize,
 			'sig_digits4':1,
 			'fnOutput':QgsProcessingUtils.generateTempFilename('highpass-output.tif')
 			}
 
 		results = processing.run( alg, params )
 		# print(results)
-		rasterLayer = QgsRasterLayer(results['fnOutput'], "highpass-" + namePrefix + "-" + self.layerName)
+		rasterLayer = QgsRasterLayer(results['fnOutput'], f"highpass-{self.highPassSize}-{namePrefix}-{self.layerName}")
 		QgsProject.instance().addMapLayer(rasterLayer, False)
 		
 		self.layerGroup.addLayer( rasterLayer )

@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>389</width>
-    <height>219</height>
+    <height>228</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -36,7 +36,7 @@
    <property name="geometry">
     <rect>
      <x>180</x>
-     <y>170</y>
+     <y>180</y>
      <width>91</width>
      <height>31</height>
     </rect>
@@ -55,7 +55,7 @@
    <property name="geometry">
     <rect>
      <x>280</x>
-     <y>170</y>
+     <y>180</y>
      <width>91</width>
      <height>31</height>
     </rect>
@@ -91,12 +91,12 @@
     <rect>
      <x>20</x>
      <y>140</y>
-     <width>351</width>
+     <width>271</width>
      <height>21</height>
     </rect>
    </property>
    <property name="text">
-    <string>Also generate high pass filtered rasters</string>
+    <string>Generate high pass version with filter size:</string>
    </property>
    <property name="checked">
     <bool>true</bool>
@@ -107,12 +107,12 @@
     <rect>
      <x>20</x>
      <y>80</y>
-     <width>151</width>
+     <width>311</width>
      <height>21</height>
     </rect>
    </property>
    <property name="text">
-    <string>Apply trend removal</string>
+    <string>Also generate trend filtered raster to nth degree:</string>
    </property>
    <property name="checked">
     <bool>true</bool>
@@ -169,20 +169,26 @@
     <number>2</number>
    </property>
   </widget>
-  <widget class="QLabel" name="label">
+  <widget class="QSpinBox" name="quickMaghighPassSize">
    <property name="geometry">
     <rect>
-     <x>240</x>
-     <y>80</y>
-     <width>81</width>
-     <height>21</height>
+     <x>301</x>
+     <y>140</y>
+     <width>71</width>
+     <height>22</height>
     </rect>
    </property>
-   <property name="text">
-    <string>nth Degree:</string>
+   <property name="minimum">
+    <number>15</number>
    </property>
-   <property name="alignment">
-    <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+   <property name="maximum">
+    <number>55</number>
+   </property>
+   <property name="singleStep">
+    <number>10</number>
+   </property>
+   <property name="value">
+    <number>35</number>
    </property>
   </widget>
  </widget>
