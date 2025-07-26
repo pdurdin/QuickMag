@@ -25,7 +25,7 @@ from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QMessageBox
 
-from qgis.core import QgsMessageLog
+from qgis.core import QgsMessageLog, QgsMapLayerProxyModel
 
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -217,6 +217,8 @@ class QuickMag():
 		if self.first_start == True:
 			self.first_start = False
 			self.dlg = QuickMagDialog()
+			self.dlg.quickMagLayerCombo.setFilters(QgsMapLayerProxyModel.PointLayer)
+			self.dlg.quickMagLayerCombo.setLayer(None)
 			self.dlg.quickMagRun.clicked.connect(self.processASC)
 
 		# show the dialog
@@ -233,32 +235,49 @@ class QuickMag():
 	
 	
 	def processASC(self):
-		self.filepath = self.dlg.quickMagFileInput.filePath()
-		if not self.filepath:
-			QMessageBox.warning(None, "Quick Mag Error", "Please select an ASC file to process")
-			return False
-		
-		# split out input ASC filename and combine with date time for group and layer names
-		filename = os.path.basename( self.filepath )
-		self.layerName = os.path.splitext( filename )[0]
-		
-		# create layer group for results
-		root = QgsProject.instance().layerTreeRoot()
-		groupName = self.layerName + "-" + datetime.now().strftime('%Y-%m-%d %H:%M')
-		self.layerGroup = root.addGroup( groupName )
-		
 		start = time.time()
-
-		if self.dlg.quickMagTrendRemoval.isChecked():
-			self.trendRemoval = True
-			self.trendPercentile = self.dlg.quickMagTrendPercentile.value()
-			self.trendDegree = self.dlg.quickMagTrendDegree.value()
 		
-		# process ASC file into vector points
-		self.loadASC()
+		medianField = "medianValue"
+		
+		# create layer group for results with temporary name
+		root = QgsProject.instance().layerTreeRoot()
+		self.layerGroup = root.addGroup( "Quickmag Output" )
+		
+		# if a points layer is selected then generate a raster from that instead
+		selectedLayer = self.dlg.quickMagLayerCombo.currentLayer()
+		if selectedLayer is not None:
+			self.layerName = selectedLayer.name()
+			self.trendRemoval = False
+			
+			medianField = self.dlg.quickMagFieldCombo.currentText()
+			if medianField is None:
+				QMessageBox.warning(None, "Quick Mag Error", "Please select a field to use for interpolation")
+				return False
+		else:
+			self.filepath = self.dlg.quickMagFileInput.filePath()
+			if not self.filepath:
+				QMessageBox.warning(None, "Quick Mag Error", "Please select an ASC file to process")
+				return False
+			
+			# split out input ASC filename and combine with date time for group and layer names
+			filename = os.path.basename( self.filepath )
+			self.layerName = os.path.splitext( filename )[0]
+
+			if self.dlg.quickMagTrendRemoval.isChecked():
+				self.trendRemoval = True
+				self.trendPercentile = self.dlg.quickMagTrendPercentile.value()
+				self.trendDegree = self.dlg.quickMagTrendDegree.value()
+			
+			# process ASC file into vector points
+			self.loadASC()
+			
+			medianField = "medianValue"
+		
+		groupName = self.layerName + "-" + datetime.now().strftime('%Y-%m-%d %H:%M')
+		self.layerGroup.setName( groupName )
 		
 		# interpolate raster
-		newRaster = self.genRaster( field="medianValue", namePrefix="median" )
+		newRaster = self.genRaster( medianField, namePrefix="median" )
 		
 		# update layer symbology to use -3/+3 min max
 		self.updateRasterDisplay( newRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
@@ -284,6 +303,64 @@ class QuickMag():
 		self.dlg.quickMagProgressLabel.setText(f"ASC processed and raster generated in: {end - start:0.2f}s")
 		
 	
+	# FUNCTION FROM AGT - self.decimationVal is default to 10
+	# this function gets a median value from across self.decimationVal readings
+	# 		for each probe, and only keeps a single point, replacing the raw
+	# 		reading with the calculated median value
+	def medMovWinDecimation(self):
+		# why is this called stamp?
+		stamp = 1
+		magDecimPoints = []
+		# get max number of probes (6 / 8)
+		probNb = max(list(zip(*self.magPoints))[4])
+		medianList = []
+		# create blank sublist of medianList for each probe
+		for i in range(0, probNb):
+			medianList.append([])	   
+		
+		# iterate through all points, stepping by number of probes
+		for i in range (0, len(self.magPoints), probNb):
+			
+			# while stamp < 10, keep adding values from probe data to the median lists for each probe
+			if stamp < self.decimationVal:
+				# step through each probe and get values across the probes
+				for j in range(0, probNb):
+					# add values to separate median list for each probe along the length of the decimation area
+					# this assumes that the data is stored sequentially by probe
+					medianList[j].append(self.magPoints[i + j][2])
+				
+				stamp += 1
+			# when it's finished getting the full group of points to be decimated, do this instead:
+			else:
+				# get medians for each probe across the decimation area
+				medianVals = list(map(lambda x : numpy.median(x), medianList))
+				
+				# iterate through each probe and append value to decimated points list...what values?
+				for j in range(0, probNb):
+					# replace the raw value with the value 
+					magDecimPoints.append(
+						(self.magPoints[i + j - (self.decimationVal//2)*probNb][0],
+						 self.magPoints[i + j - (self.decimationVal//2)*probNb][1],
+						 float(medianVals[j]),
+						 self.magPoints[i + j - (self.decimationVal//2)*probNb][3],
+						 self.magPoints[i + j - (self.decimationVal//2)*probNb][4])
+						 )
+				
+				# empty median list ready for the next set of values
+				medianList = []
+				
+				# set stamp to 1 (not 0??)
+				stamp = 1
+				
+				# iterate through each probe
+				for j in range(0, probNb):
+					medianList.append([])					
+					medianList[j].append(self.magPoints[i + j][2])				  
+		
+		# only keep the decimated points
+		self.magPoints = magDecimPoints
+	
+	
 	# load ASC file, perform median/trend calculations and generate vector points layer with modified values
 	def loadASC(self):
 		# Sensys ASC files use UTM CRS with the UTM code as the first part of the x value
@@ -296,14 +373,14 @@ class QuickMag():
 		self.data = []
 
 		# read from file:
-		#	0              1       2         3          4
+		#	0			   1	   2		 3			4
 		#	CoordXWithUTM, CoordY, rawValue, traceName, probeNumber
 		#
 		# converted "reading" in self.data, which will be sorted by traceAndProbe:
 		#
-		#   0              1       2         3          4            5              6                   7
-		# 	CoordX,        CoordY, rawValue, traceName, probeNumber, traceAndProbe, medianRemovedValue, trendRemovedValue
-		#   float          float   float     str        str          tuple          float               float
+		#	0			   1	   2		 3			4			 5				6				7					8
+		#	CoordX,		   CoordY, rawValue, traceName, probeNumber, traceAndProbe, decimatedValue, medianRemovedValue, trendRemovedValue
+		#	float		   float   float	 str		str			 tuple			float			float				float
 
 		def convertCoords(rawCoordX, rawCoordY):
 			rawCoordX = float(rawCoordX)
@@ -321,7 +398,7 @@ class QuickMag():
 			traceName, probeNumber = rawLine[3], rawLine[4]
 			traceAndProbe = (traceName, probeNumber)
 			# Return a list rather than a tuple so we can fill in the new columns later.
-			return [x, y, rawValue, traceName, probeNumber, traceAndProbe, 0.0, 0.0]
+			return [x, y, rawValue, traceName, probeNumber, traceAndProbe, rawValue, 0.0, 0.0]
 
 		def getTraceAndProbe(reading):
 			# reading[5] is traceAndProbe
@@ -331,6 +408,9 @@ class QuickMag():
 		lastCoords = {}
 
 		def shouldKeepThisLine(reading):
+			# hack to keep all points
+			# return True
+			
 			traceAndProbe = getTraceAndProbe(reading)
 			x, y = reading[0], reading[1]
 			keep = True
@@ -351,13 +431,43 @@ class QuickMag():
 		start = time.time()
 		print("Loading ASC...")
 
+		# read file data into list
 		with open( self.filepath ) as csvfile:
 			rawLines = csv.reader(csvfile, delimiter = "\t")
-			self.data = list( filter(shouldKeepThisLine, map(convertRawLine, rawLines) ) )
+			self.data = list( map(convertRawLine, rawLines) )
+		
+		# sort data by traceAndProbe, unique value for each line of readings combined from trace and probe values
 		self.data.sort(key=getTraceAndProbe)
 
 		end = time.time()
 		print(f"Duration: {end - start:0.2f}s")
+		
+		start = time.time()
+		print("Implementing moving median corrections...")
+		# get moving median values along each line
+		movingMedianList = {}
+		movingMedianWindow = 5	# 5 points either side of the central point
+		
+		length = len( self.data )
+		for i, reading in enumerate(self.data):
+			currentTraceAndProbe = reading[5]
+			movingMedianList[currentTraceAndProbe] = []
+			for j in range(-movingMedianWindow, movingMedianWindow):
+				# don't go beyond start or end of lines
+				if i + j < 0 or i + j >= length:
+					continue
+				if self.data[i + j][5] != currentTraceAndProbe:
+					continue
+				movingMedianList[reading[5]].append( self.data[i + j][2] )
+			reading[6] = statistics.median( movingMedianList[currentTraceAndProbe] )
+			movingMedianList[currentTraceAndProbe] = []
+			
+		end = time.time()
+		print(f"Duration: {end - start:0.2f}s")
+		
+		# decimate data based on distance between points
+		# this has to occur AFTER the moving median calculation above, unfortunately!
+		self.data = list( filter(shouldKeepThisLine, self.data ) )
 		
 		# perform median/trend calculations grouped by trace and probe
 		start = time.time()
@@ -374,16 +484,16 @@ class QuickMag():
 			# Pivot the group from a list of rows into a list of columns.
 			groupColumns = list( zip(*group) )
 
-			# Extract the rawValue column
-			lineRawValues = groupColumns[2]
+			# Extract the decimatedValue column
+			lineRawValues = groupColumns[6]
 			# get median value for each group
 			median = statistics.median( lineRawValues )
 			
 			# 'group' contains references to the same reading-lists that convertRawLine() created, so we
 			# can change each of these reading-lists here.
 			for reading in group:
-				rawValue = reading[2]
-				reading[6] = rawValue - median
+				rawValue = reading[6]			# reading[6] is value modified by the moving median
+				reading[7] = rawValue - median	# reading[7] is medianRemovedValue
 			
 			if self.trendRemoval:
 				# store position of first reading in the line
@@ -405,7 +515,7 @@ class QuickMag():
 					filteredLinePositions = []
 					filteredRawValues = []
 					for position, rawValue in zip( linePositions, lineRawValues ):
-						if trendThresholdMin <= rawValue <= trendThresholdMax:
+						if trendThresholdMin < rawValue < trendThresholdMax:
 							filteredLinePositions.append( position )
 							filteredRawValues.append( rawValue )
 					return ( filteredLinePositions, filteredRawValues )
@@ -416,11 +526,12 @@ class QuickMag():
 				else:
 					filteredLinePositions, filteredRawValues = linePositions, lineRawValues
 				
-				# second order polynomial appears to work well on most data with trends
-				trendCoeffs = polyfit(filteredLinePositions, filteredRawValues, deg=self.trendDegree)
-				trendValues = polyval(linePositions, trendCoeffs)
-				for i, reading in enumerate(group):
-					reading[7] = lineRawValues[i] - trendValues[i]
+				# apply polynomial fit if there are any values in the list
+				if len( filteredLinePositions ) > 0:
+					trendCoeffs = polyfit(filteredLinePositions, filteredRawValues, deg=self.trendDegree)
+					trendValues = polyval(linePositions, trendCoeffs)
+					for i, reading in enumerate(group):
+						reading[8] = lineRawValues[i] - trendValues[i]	# reading[8] is trendRemovedValue
 				
 		end = time.time()
 		print(f"Duration: {end - start:0.2f}s")
@@ -443,6 +554,7 @@ class QuickMag():
 			QgsField("rawValue", QMetaType.Type.Double),
 			QgsField("trace", QMetaType.Type.QString),
 			QgsField("probe", QMetaType.Type.Int),
+			QgsField("decimatedValue", QMetaType.Type.Double),
 			QgsField("medianValue", QMetaType.Type.Double),
 			QgsField("trendValue", QMetaType.Type.Double)
 			])
@@ -456,46 +568,14 @@ class QuickMag():
 		
 		start = time.time()
 		print("Generating vector points...")
-		# loop through data and create point for each row with medianValue
-		# medianValue = value - probeMedians[trace, probe]
-		# trendValue needs more complex calculations involving position along line
+		# loop through data and create vector point for each row
 		for reading in self.data:
-			# data structure:
-			#	['30568506.443', '5659862.034', '-0.5', 'L1_20250122-120324_GZ.prm', '1']
-			
-			"""
-			# get x/y coordinates as floats with UTMval removed
-			x = float(reading[0]) - (utmVal * 1000000)
-			y = float(reading[1])
-			
-			probeNo = "probe" + reading[4]
-			if probeNo in lastX and probeNo in lastY:
-				# skip over points closer together than self.pointSpacing (in metres) along one line.
-				# This reduces processing time considerably, and mainly accounts for the machine being
-				# pushed with speed settings intended for towing at higher speed!
-				distance = sqrt( (x - lastX[probeNo])**2 + (y - lastY[probeNo])**2 )
-				if distance < self.pointSpacing:
-					continue
-			
-			# last stored point position
-			lastX[probeNo] = x
-			lastY[probeNo] = y
-			
-			# actual readings and processed values
-			rawValue = float(reading[2])
-			medianValue = rawValue - probeMedians[reading[3]][reading[4]]
-			
-			# this needs to be calculated!
-			trendValue = 0.0
-			"""
-			
 			# create vector point
 			f = QgsFeature()
 			qPoint = QgsPointXY(reading[0], reading[1])
 			xPoint = self.crsTransform.transform(qPoint) # coordinate Transform from UTM to project CRS
 			f.setGeometry( QgsGeometry.fromPointXY(xPoint) )
 			
-			# f.setGeometry(QgsGeometry.fromPointXY(QgsPointXY( x, y )))
 			f.setAttributes([
 				reading[0],
 				reading[1],
@@ -503,7 +583,8 @@ class QuickMag():
 				reading[3],
 				reading[4],
 				reading[6],
-				reading[7]
+				reading[7],
+				reading[8]
 				])
 			pr.addFeature(f)
 			
@@ -541,7 +622,7 @@ class QuickMag():
 	# function to interpolate raster from vector points layer
 	def genRaster(self, field = 'medianValue', namePrefix=''):
 		start = time.time()
-		print("Generating raster")
+		print(f"Generating {namePrefix} raster...")
 		
 		# theoretically we can use the currently selected layer
 		if self.layerName is None:
@@ -635,6 +716,9 @@ class QuickMag():
 		if not layer:
 			layer = iface.layerTreeView().currentLayer()
 		
+		start = time.time()
+		print(f"Generating high pass filtered raster...")
+		
 		alg = "wbw:high_pass_median_filter"
 		params = {
 			'inputRaster1':layer,
@@ -650,6 +734,9 @@ class QuickMag():
 		QgsProject.instance().addMapLayer(rasterLayer, False)
 		
 		self.layerGroup.addLayer( rasterLayer )
+		
+		end = time.time()
+		print(f"Duration: {end - start:0.2f}s")
 		
 		return rasterLayer
 		

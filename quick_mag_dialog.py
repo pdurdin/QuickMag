@@ -26,6 +26,7 @@ import os
 
 from qgis.PyQt import uic
 from qgis.PyQt import QtWidgets
+from qgis.gui import QgsMapLayerComboBox
 
 from qgis.core import QgsMessageLog
 
@@ -47,6 +48,14 @@ class QuickMagDialog(QtWidgets.QDialog, FORM_CLASS):
 		self.setupUi(self)
 		self.setFixedSize(self.size())
 		self.quickMagClose.clicked.connect(self.hideDialog)
+		self.quickMagLayerCombo.currentIndexChanged.connect(self.populateFieldCombo)
+	
+	def populateFieldCombo(self):
+		self.quickMagFieldCombo.clear()
+		layer = self.quickMagLayerCombo.currentLayer()
+		if layer is not None:
+			self.quickMagFieldCombo.addItems(layer.fields().names())
+			
 		
 	def hideDialog(self):
 		# reset progress message
