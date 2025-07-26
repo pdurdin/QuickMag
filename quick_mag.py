@@ -217,9 +217,20 @@ class QuickMag():
 		if self.first_start == True:
 			self.first_start = False
 			self.dlg = QuickMagDialog()
-			self.dlg.quickMagLayerCombo.setFilters(QgsMapLayerProxyModel.PointLayer)
-			self.dlg.quickMagLayerCombo.setLayer(None)
+			
+			# set filter for raster generation layer combo
+			self.dlg.quickMagRasterLayerCombo.setFilters(QgsMapLayerProxyModel.PointLayer)
+			self.dlg.quickMagRasterLayerCombo.setLayer(None)
+			
+			# set filter for high pass filter layer combo
+			self.dlg.quickMagHighPassLayerCombo.setFilters(QgsMapLayerProxyModel.RasterLayer)
+			self.dlg.quickMagHighPassLayerCombo.setLayer(None)
+			
+			# connect buttons to functions
 			self.dlg.quickMagRun.clicked.connect(self.processASC)
+			self.dlg.quickMagRasterButton.clicked.connect(self.generateRasterFromPoints)
+			self.dlg.quickMagHighPassButton.clicked.connect(self.highPassSelectedRaster)
+			self.dlg.quickMagMergeFilesButton.clicked.connect(self.mergeASCFiles)
 
 		# show the dialog
 		self.dlg.show()
@@ -233,49 +244,113 @@ class QuickMag():
 			# substitute with your code.
 			pass
 	
+	# merge two or more 
+	def mergeASCFiles(self):
+		import shlex
+		
+		fileString = self.dlg.quickMagMergeFilesInput.filePath()
+		outputFile = self.dlg.quickMagMergeFilesOutput.filePath()
+		
+		if not fileString or not outputFile:
+			QMessageBox.warning(None, "Quick Mag Error", "Please select ASC files to merge and specifiy an output file")
+			return False
+		
+		files = shlex.split(fileString)
+		if len(files) <= 1:
+			QMessageBox.warning(None, "Quick Mag Error", "Please select two or more ASC files to merge")
+			return False
+				
+		with open(outputFile, 'w') as outfile:
+			for fname in files:
+				with open(fname) as infile:
+					for line in infile:
+						outfile.write(line)
+		
+		self.dlg.quickMagMergeProgressLabel.setText(f"ASC files merged to: {outputFile}")
 	
+	# generate a raster from an existing points layer
+	def generateRasterFromPoints(self):
+		selectedLayer = self.dlg.quickMagRasterLayerCombo.currentLayer()
+		if selectedLayer is not None:
+			
+			medianField = self.dlg.quickMagRasterFieldCombo.currentText()
+			if medianField is None:
+				QMessageBox.warning(None, "Quick Mag Error", "Please select a field to use for interpolation")
+				return False
+			
+			self.layerName = selectedLayer.name()
+			
+			start = time.time()
+			print("Generating raster from points layer...")
+		
+			self.createLayerGroup()
+			
+			# interpolate raster
+			newRaster = self.genRaster( medianField, namePrefix=medianField )
+			
+			# update layer symbology to use -3/+3 min max
+			self.updateRasterDisplay( newRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
+		
+			end = time.time()
+			print(f"TOTAL DURATION: {end - start:0.2f}s")
+			self.dlg.quickMagRasterProgressLabel.setText(f"Raster generated in: {end - start:0.2f}s")
+	
+	def createLayerGroup(self, groupName=None):
+		# create layer group for results with temporary name
+		root = QgsProject.instance().layerTreeRoot()
+		self.layerGroup = root.addGroup( "Quickmag Output" )
+		
+		if groupName is None:
+			groupName = self.layerName + "-" + datetime.now().strftime('%Y-%m-%d %H:%M')
+		
+		self.layerGroup.setName( groupName )
+	
+	def highPassSelectedRaster(self):
+		selectedLayer = self.dlg.quickMagHighPassLayerCombo.currentLayer()
+		if not selectedLayer:
+			QMessageBox.warning(None, "Quick Mag Error", "Please select a raster layer to run a high pass filter on")
+			return False
+				
+		self.layerName = selectedLayer.name()
+		rasterLayer = QgsProject.instance().mapLayersByName(self.layerName)[0]
+
+		self.highPassSize = self.dlg.quickMagHighPassFilterSize.value()
+		if self.highPassSize % 2 == 0:
+			self.highPassSize -= 1
+		
+		addToGroup = False
+		highPassRaster = self.runHighPassFilter( rasterLayer, "", addToGroup )
+		self.updateRasterDisplay( highPassRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
+		
+		self.dlg.quickMagHighPassProgressLabel.setText(f"High pass filter applied to {self.layerName}")
+	
+	# load and process a full ASC file from scratch
 	def processASC(self):
 		start = time.time()
 		
 		medianField = "medianValue"
 		
-		# create layer group for results with temporary name
-		root = QgsProject.instance().layerTreeRoot()
-		self.layerGroup = root.addGroup( "Quickmag Output" )
+		self.filepath = self.dlg.quickMagFileInput.filePath()
+		if not self.filepath:
+			QMessageBox.warning(None, "Quick Mag Error", "Please select an ASC file to process")
+			return False
 		
-		# if a points layer is selected then generate a raster from that instead
-		selectedLayer = self.dlg.quickMagLayerCombo.currentLayer()
-		if selectedLayer is not None:
-			self.layerName = selectedLayer.name()
-			self.trendRemoval = False
-			
-			medianField = self.dlg.quickMagFieldCombo.currentText()
-			if medianField is None:
-				QMessageBox.warning(None, "Quick Mag Error", "Please select a field to use for interpolation")
-				return False
-		else:
-			self.filepath = self.dlg.quickMagFileInput.filePath()
-			if not self.filepath:
-				QMessageBox.warning(None, "Quick Mag Error", "Please select an ASC file to process")
-				return False
-			
-			# split out input ASC filename and combine with date time for group and layer names
-			filename = os.path.basename( self.filepath )
-			self.layerName = os.path.splitext( filename )[0]
+		# split out input ASC filename and combine with date time for group and layer names
+		filename = os.path.basename( self.filepath )
+		self.layerName = os.path.splitext( filename )[0]
 
-			if self.dlg.quickMagTrendRemoval.isChecked():
-				self.trendRemoval = True
-				self.trendPercentile = self.dlg.quickMagTrendPercentile.value()
-				self.trendDegree = self.dlg.quickMagTrendDegree.value()
-			
-			# process ASC file into vector points
-			self.loadASC()
-			
-			medianField = "medianValue"
+		# create a layer group to put the results in
+		self.createLayerGroup()
+		addToGroup = True
 		
-		groupName = self.layerName + "-" + datetime.now().strftime('%Y-%m-%d %H:%M')
-		self.layerGroup.setName( groupName )
+		if self.dlg.quickMagTrendRemoval.isChecked():
+			self.trendRemoval = True
+			self.trendPercentile = self.dlg.quickMagTrendPercentile.value()
+			self.trendDegree = self.dlg.quickMagTrendDegree.value()
 		
+		# process ASC file into vector points
+		self.loadASC()
+
 		# interpolate raster
 		newRaster = self.genRaster( medianField, namePrefix="median" )
 		
@@ -284,82 +359,23 @@ class QuickMag():
 		
 		# run high pass filter if required (default on)
 		if self.dlg.quickMagHighPass.isChecked():		
-			self.highPassSize = self.dlg.quickMaghighPassSize.value()
+			self.highPassSize = self.dlg.quickMagHighPassSize.value()
 			if self.highPassSize % 2 == 0:
 				self.highPassSize -= 1
 			
-			highPassRaster = self.runHighPassFilter( newRaster, namePrefix="median" )
+			highPassRaster = self.runHighPassFilter( newRaster, "median", addToGroup )
 			self.updateRasterDisplay( highPassRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
 		
 		if self.trendRemoval:
 			trendRaster = self.genRaster( field="trendValue", namePrefix="trend" )
 			self.updateRasterDisplay( trendRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
 			if self.dlg.quickMagHighPass.isChecked():		
-				trendHighPassRaster = self.runHighPassFilter( trendRaster, namePrefix="trend" )
+				trendHighPassRaster = self.runHighPassFilter( trendRaster, "trend", addToGroup )
 				self.updateRasterDisplay( trendHighPassRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
 		
 		end = time.time()
 		print(f"TOTAL DURATION: {end - start:0.2f}s")
 		self.dlg.quickMagProgressLabel.setText(f"ASC processed and raster generated in: {end - start:0.2f}s")
-		
-	
-	# FUNCTION FROM AGT - self.decimationVal is default to 10
-	# this function gets a median value from across self.decimationVal readings
-	# 		for each probe, and only keeps a single point, replacing the raw
-	# 		reading with the calculated median value
-	def medMovWinDecimation(self):
-		# why is this called stamp?
-		stamp = 1
-		magDecimPoints = []
-		# get max number of probes (6 / 8)
-		probNb = max(list(zip(*self.magPoints))[4])
-		medianList = []
-		# create blank sublist of medianList for each probe
-		for i in range(0, probNb):
-			medianList.append([])	   
-		
-		# iterate through all points, stepping by number of probes
-		for i in range (0, len(self.magPoints), probNb):
-			
-			# while stamp < 10, keep adding values from probe data to the median lists for each probe
-			if stamp < self.decimationVal:
-				# step through each probe and get values across the probes
-				for j in range(0, probNb):
-					# add values to separate median list for each probe along the length of the decimation area
-					# this assumes that the data is stored sequentially by probe
-					medianList[j].append(self.magPoints[i + j][2])
-				
-				stamp += 1
-			# when it's finished getting the full group of points to be decimated, do this instead:
-			else:
-				# get medians for each probe across the decimation area
-				medianVals = list(map(lambda x : numpy.median(x), medianList))
-				
-				# iterate through each probe and append value to decimated points list...what values?
-				for j in range(0, probNb):
-					# replace the raw value with the value 
-					magDecimPoints.append(
-						(self.magPoints[i + j - (self.decimationVal//2)*probNb][0],
-						 self.magPoints[i + j - (self.decimationVal//2)*probNb][1],
-						 float(medianVals[j]),
-						 self.magPoints[i + j - (self.decimationVal//2)*probNb][3],
-						 self.magPoints[i + j - (self.decimationVal//2)*probNb][4])
-						 )
-				
-				# empty median list ready for the next set of values
-				medianList = []
-				
-				# set stamp to 1 (not 0??)
-				stamp = 1
-				
-				# iterate through each probe
-				for j in range(0, probNb):
-					medianList.append([])					
-					medianList[j].append(self.magPoints[i + j][2])				  
-		
-		# only keep the decimated points
-		self.magPoints = magDecimPoints
-	
 	
 	# load ASC file, perform median/trend calculations and generate vector points layer with modified values
 	def loadASC(self):
@@ -407,10 +423,8 @@ class QuickMag():
 		# traceAndProbe -> (x, y)
 		lastCoords = {}
 
+		# function to check distance to last saved point.
 		def shouldKeepThisLine(reading):
-			# hack to keep all points
-			# return True
-			
 			traceAndProbe = getTraceAndProbe(reading)
 			x, y = reading[0], reading[1]
 			keep = True
@@ -597,7 +611,6 @@ class QuickMag():
 		vlayer.updateExtents() 
 		
 		QgsProject.instance().addMapLayer(vlayer, False)
-		
 		self.layerGroup.addLayer(vlayer)
 		
 		# do not show the points layer by default
@@ -712,9 +725,10 @@ class QuickMag():
 			node.setExpanded(False)
 	
 	# use Whitebox Workflows high pass median filter
-	def runHighPassFilter( self, layer = None, namePrefix = '' ):
+	def runHighPassFilter( self, layer = None, namePrefix = '', groupExists = False ):
 		if not layer:
-			layer = iface.layerTreeView().currentLayer()
+			QMessageBox.warning(None, "Quick Mag Error", "Please select a layer to run a high pass filter on")
+			return False
 		
 		start = time.time()
 		print(f"Generating high pass filtered raster...")
@@ -731,9 +745,13 @@ class QuickMag():
 		results = processing.run( alg, params )
 		# print(results)
 		rasterLayer = QgsRasterLayer(results['fnOutput'], f"highpass-{self.highPassSize}-{namePrefix}-{self.layerName}")
-		QgsProject.instance().addMapLayer(rasterLayer, False)
 		
-		self.layerGroup.addLayer( rasterLayer )
+		
+		if groupExists is not False:
+			QgsProject.instance().addMapLayer(rasterLayer, False)
+			self.layerGroup.addLayer( rasterLayer )
+		else:
+			QgsProject.instance().addMapLayer(rasterLayer, True)
 		
 		end = time.time()
 		print(f"Duration: {end - start:0.2f}s")

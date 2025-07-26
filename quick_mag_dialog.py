@@ -48,13 +48,13 @@ class QuickMagDialog(QtWidgets.QDialog, FORM_CLASS):
 		self.setupUi(self)
 		self.setFixedSize(self.size())
 		self.quickMagClose.clicked.connect(self.hideDialog)
-		self.quickMagLayerCombo.currentIndexChanged.connect(self.populateFieldCombo)
+		self.quickMagRasterLayerCombo.currentIndexChanged.connect(self.populateRasterFieldCombo)
 	
-	def populateFieldCombo(self):
-		self.quickMagFieldCombo.clear()
-		layer = self.quickMagLayerCombo.currentLayer()
+	def populateRasterFieldCombo(self):
+		self.quickMagRasterFieldCombo.clear()
+		layer = self.quickMagRasterLayerCombo.currentLayer()
 		if layer is not None:
-			self.quickMagFieldCombo.addItems(layer.fields().names())
+			self.quickMagRasterFieldCombo.addItems(layer.fields().names())
 			
 		
 	def hideDialog(self):

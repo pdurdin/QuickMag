@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>389</width>
-    <height>311</height>
+    <width>771</width>
+    <height>580</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -23,7 +23,7 @@
    <property name="geometry">
     <rect>
      <x>20</x>
-     <y>20</y>
+     <y>80</y>
      <width>351</width>
      <height>21</height>
     </rect>
@@ -35,11 +35,17 @@
   <widget class="QPushButton" name="quickMagRun">
    <property name="geometry">
     <rect>
-     <x>180</x>
-     <y>270</y>
+     <x>280</x>
+     <y>220</y>
      <width>91</width>
      <height>31</height>
     </rect>
+   </property>
+   <property name="font">
+    <font>
+     <weight>75</weight>
+     <bold>true</bold>
+    </font>
    </property>
    <property name="text">
     <string>Run</string>
@@ -54,21 +60,30 @@
   <widget class="QPushButton" name="quickMagClose">
    <property name="geometry">
     <rect>
-     <x>280</x>
-     <y>270</y>
+     <x>340</x>
+     <y>530</y>
      <width>91</width>
      <height>31</height>
     </rect>
    </property>
+   <property name="font">
+    <font>
+     <weight>75</weight>
+     <bold>true</bold>
+    </font>
+   </property>
    <property name="text">
     <string>Close</string>
    </property>
+   <property name="flat">
+    <bool>false</bool>
+   </property>
   </widget>
-  <widget class="QLabel" name="quickMagProgressLabel">
+  <widget class="QLabel" name="label_1">
    <property name="geometry">
     <rect>
      <x>20</x>
-     <y>50</y>
+     <y>60</y>
      <width>351</width>
      <height>21</height>
     </rect>
@@ -80,7 +95,7 @@
     </sizepolicy>
    </property>
    <property name="text">
-    <string>Select an ASC file to process</string>
+    <string>Select an ASC file to process:</string>
    </property>
    <property name="alignment">
     <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
@@ -90,7 +105,7 @@
    <property name="geometry">
     <rect>
      <x>20</x>
-     <y>140</y>
+     <y>180</y>
      <width>271</width>
      <height>21</height>
     </rect>
@@ -106,13 +121,13 @@
    <property name="geometry">
     <rect>
      <x>20</x>
-     <y>80</y>
+     <y>120</y>
      <width>311</width>
      <height>21</height>
     </rect>
    </property>
    <property name="text">
-    <string>Also generate trend filtered raster to nth degree:</string>
+    <string>Remove trends with polynomial of nth degree:</string>
    </property>
    <property name="checked">
     <bool>true</bool>
@@ -121,21 +136,24 @@
   <widget class="QLabel" name="quickMagPercentileLabel">
    <property name="geometry">
     <rect>
-     <x>80</x>
-     <y>110</y>
+     <x>20</x>
+     <y>150</y>
      <width>291</width>
      <height>21</height>
     </rect>
    </property>
    <property name="text">
-    <string>Percentile to exclude from trend calculation</string>
+    <string>Percentile to exclude from trend calculation:</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
    </property>
   </widget>
   <widget class="QSpinBox" name="quickMagTrendPercentile">
    <property name="geometry">
     <rect>
-     <x>20</x>
-     <y>110</y>
+     <x>320</x>
+     <y>150</y>
      <width>51</width>
      <height>22</height>
     </rect>
@@ -156,8 +174,8 @@
   <widget class="QSpinBox" name="quickMagTrendDegree">
    <property name="geometry">
     <rect>
-     <x>330</x>
-     <y>80</y>
+     <x>329</x>
+     <y>120</y>
      <width>42</width>
      <height>22</height>
     </rect>
@@ -169,11 +187,11 @@
     <number>3</number>
    </property>
   </widget>
-  <widget class="QSpinBox" name="quickMaghighPassSize">
+  <widget class="QSpinBox" name="quickMagHighPassSize">
    <property name="geometry">
     <rect>
-     <x>301</x>
-     <y>140</y>
+     <x>300</x>
+     <y>180</y>
      <width>71</width>
      <height>22</height>
     </rect>
@@ -191,53 +209,423 @@
     <number>35</number>
    </property>
   </widget>
-  <widget class="QgsMapLayerComboBox" name="quickMagLayerCombo">
-   <property name="geometry">
-    <rect>
-     <x>210</x>
-     <y>180</y>
-     <width>160</width>
-     <height>31</height>
-    </rect>
-   </property>
-   <property name="allowEmptyLayer">
-    <bool>true</bool>
-   </property>
-  </widget>
-  <widget class="QLabel" name="label">
+  <widget class="QFrame" name="frame">
    <property name="geometry">
     <rect>
      <x>20</x>
-     <y>185</y>
-     <width>181</width>
+     <y>280</y>
+     <width>351</width>
+     <height>231</height>
+    </rect>
+   </property>
+   <property name="frameShape">
+    <enum>QFrame::Panel</enum>
+   </property>
+   <property name="frameShadow">
+    <enum>QFrame::Plain</enum>
+   </property>
+   <widget class="QLabel" name="label_3">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>10</y>
+      <width>151</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>10</pointsize>
+      <weight>75</weight>
+      <bold>true</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string>Merge ASC files</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_4">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>120</y>
+      <width>121</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Output filename:</string>
+    </property>
+   </widget>
+   <widget class="QgsFileWidget" name="quickMagMergeFilesOutput">
+    <property name="geometry">
+     <rect>
+      <x>150</x>
+      <y>120</y>
+      <width>191</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="filter">
+     <string>Sensys (*.asc)</string>
+    </property>
+    <property name="storageMode">
+     <enum>QgsFileWidget::SaveFile</enum>
+    </property>
+   </widget>
+   <widget class="QgsFileWidget" name="quickMagMergeFilesInput">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>70</y>
+      <width>331</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="fileWidgetButtonVisible">
+     <bool>true</bool>
+    </property>
+    <property name="useLink">
+     <bool>false</bool>
+    </property>
+    <property name="fullUrl">
+     <bool>false</bool>
+    </property>
+    <property name="filter">
+     <string>Sensys (*.asc)</string>
+    </property>
+    <property name="storageMode">
+     <enum>QgsFileWidget::GetMultipleFiles</enum>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="quickMagMergeFilesButton">
+    <property name="geometry">
+     <rect>
+      <x>210</x>
+      <y>160</y>
+      <width>131</width>
+      <height>28</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <weight>75</weight>
+      <bold>true</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string>Merge ASC files</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_5">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>50</y>
+      <width>151</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Select files to merge:</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="quickMagMergeProgressLabel">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>200</y>
+      <width>331</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QFrame" name="frame_2">
+   <property name="geometry">
+    <rect>
+     <x>400</x>
+     <y>20</y>
+     <width>351</width>
+     <height>231</height>
+    </rect>
+   </property>
+   <property name="frameShape">
+    <enum>QFrame::Panel</enum>
+   </property>
+   <property name="frameShadow">
+    <enum>QFrame::Plain</enum>
+   </property>
+   <widget class="QLabel" name="label_6">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>10</y>
+      <width>251</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>10</pointsize>
+      <weight>75</weight>
+      <bold>true</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string>Generate raster from points</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_7">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>110</y>
+      <width>161</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Interpolation values:</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="quickMagRasterButton">
+    <property name="geometry">
+     <rect>
+      <x>210</x>
+      <y>160</y>
+      <width>131</width>
+      <height>28</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>8</pointsize>
+      <weight>75</weight>
+      <bold>true</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string>Generate</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_8">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>40</y>
+      <width>151</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Select points layer:</string>
+    </property>
+   </widget>
+   <widget class="QgsMapLayerComboBox" name="quickMagRasterLayerCombo">
+    <property name="geometry">
+     <rect>
+      <x>9</x>
+      <y>70</y>
+      <width>331</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="allowEmptyLayer">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QComboBox" name="quickMagRasterFieldCombo">
+    <property name="geometry">
+     <rect>
+      <x>180</x>
+      <y>110</y>
+      <width>160</width>
+      <height>31</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QLabel" name="quickMagRasterProgressLabel">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>200</y>
+      <width>331</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QFrame" name="frame_3">
+   <property name="geometry">
+    <rect>
+     <x>400</x>
+     <y>280</y>
+     <width>351</width>
+     <height>231</height>
+    </rect>
+   </property>
+   <property name="frameShape">
+    <enum>QFrame::Panel</enum>
+   </property>
+   <property name="frameShadow">
+    <enum>QFrame::Plain</enum>
+   </property>
+   <widget class="QLabel" name="label_15">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>10</y>
+      <width>251</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>10</pointsize>
+      <weight>75</weight>
+      <bold>true</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string>Run high pass filter on raster</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_16">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>120</y>
+      <width>161</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>High pass filter size:</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="quickMagHighPassButton">
+    <property name="geometry">
+     <rect>
+      <x>210</x>
+      <y>160</y>
+      <width>131</width>
+      <height>28</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>8</pointsize>
+      <weight>75</weight>
+      <bold>true</bold>
+     </font>
+    </property>
+    <property name="text">
+     <string>Generate</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_17">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>40</y>
+      <width>151</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Select raster layer:</string>
+    </property>
+   </widget>
+   <widget class="QgsMapLayerComboBox" name="quickMagHighPassLayerCombo">
+    <property name="geometry">
+     <rect>
+      <x>9</x>
+      <y>70</y>
+      <width>331</width>
+      <height>31</height>
+     </rect>
+    </property>
+    <property name="allowEmptyLayer">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QLabel" name="quickMagHighPassProgressLabel">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>200</y>
+      <width>331</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
+   </widget>
+   <widget class="QSpinBox" name="quickMagHighPassFilterSize">
+    <property name="geometry">
+     <rect>
+      <x>270</x>
+      <y>120</y>
+      <width>71</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="minimum">
+     <number>15</number>
+    </property>
+    <property name="maximum">
+     <number>55</number>
+    </property>
+    <property name="singleStep">
+     <number>10</number>
+    </property>
+    <property name="value">
+     <number>35</number>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QLabel" name="label_18">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>20</y>
+     <width>351</width>
      <height>21</height>
     </rect>
    </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+     <weight>75</weight>
+     <bold>true</bold>
+    </font>
+   </property>
    <property name="text">
-    <string>Generate raster from points layer:</string>
+    <string>Generate rasters from ASC file</string>
    </property>
   </widget>
-  <widget class="QComboBox" name="quickMagFieldCombo">
-   <property name="geometry">
-    <rect>
-     <x>210</x>
-     <y>220</y>
-     <width>160</width>
-     <height>31</height>
-    </rect>
-   </property>
-  </widget>
-  <widget class="QLabel" name="label_2">
+  <widget class="QLabel" name="quickMagProgressLabel">
    <property name="geometry">
     <rect>
      <x>20</x>
      <y>220</y>
-     <width>181</width>
+     <width>251</width>
      <height>31</height>
     </rect>
    </property>
    <property name="text">
-    <string>Interpolating values in field:</string>
+    <string/>
    </property>
   </widget>
  </widget>
