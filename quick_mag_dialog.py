@@ -59,6 +59,6 @@ class QuickMagDialog(QtWidgets.QDialog, FORM_CLASS):
 		
 	def hideDialog(self):
 		# reset progress message
-		self.quickMagProgressLabel.setText("Select an ASC file to process")
+		self.quickMagProgressLabel.setText("")
 		self.setResult(self.DialogCode.Rejected)
 		self.hide()

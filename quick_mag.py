@@ -96,6 +96,7 @@ class QuickMag():
 		self.trendDegree = 2			# default nth degree for polynomial fit
 		self.highPassSize = 35			# default high pass filter size
 		self.movingMedianWindow = 3		# default window size for moving median calculation
+		self.highPassFilter = False		# default do not run high pass filter on results
 
 	# noinspection PyMethodMayBeStatic
 	def tr(self, message):
@@ -267,7 +268,11 @@ class QuickMag():
 					for line in infile:
 						outfile.write(line)
 		
-		self.dlg.quickMagMergeProgressLabel.setText(f"ASC files merged to: {outputFile}")
+		self.dlg.quickMagMergeProgressLabel.setText(f"Merge complete")
+		QMessageBox.information(None, "Quick Mag", f"ASC files merged to: {outputFile}")
+		self.dlg.quickMagMergeProgressLabel.setText(None)
+		self.dlg.quickMagMergeFilesInput.setFilePath(None)
+		self.dlg.quickMagMergeFilesOutput.setFilePath(None)
 	
 	# generate a raster from an existing points layer
 	def generateRasterFromPoints(self):
@@ -345,35 +350,40 @@ class QuickMag():
 		self.createLayerGroup()
 		addToGroup = True
 		
+		# default is to do trend removal
 		if self.dlg.quickMagTrendRemoval.isChecked():
 			self.trendRemoval = True
 			self.trendPercentile = self.dlg.quickMagTrendPercentile.value()
 			self.trendDegree = self.dlg.quickMagTrendDegree.value()
 		
-		# process ASC file into vector points
-		self.loadASC()
-
-		# interpolate raster
-		newRaster = self.genRaster( medianField, namePrefix="median" )
-		
-		# update layer symbology to use -3/+3 min max
-		self.updateRasterDisplay( newRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
-		
-		# run high pass filter if required (default on)
-		if self.dlg.quickMagHighPass.isChecked():		
+		# has high pass filter been selected?
+		if self.dlg.quickMagHighPass.isChecked():
+			self.highPassFilter = True
 			self.highPassSize = self.dlg.quickMagHighPassSize.value()
 			if self.highPassSize % 2 == 0:
 				self.highPassSize -= 1
-			
-			highPassRaster = self.runHighPassFilter( newRaster, "median", addToGroup )
-			self.updateRasterDisplay( highPassRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
 		
+		# process ASC file into vector points
+		self.loadASC()
+		
+		# generate raster from trend-filtered values if desired (default on)
 		if self.trendRemoval:
 			trendRaster = self.genRaster( field="trendValue", namePrefix="trend" )
 			self.updateRasterDisplay( trendRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
-			if self.dlg.quickMagHighPass.isChecked():		
+			
+			# run high pass filter if required (default off)
+			if self.highPassFilter:		
 				trendHighPassRaster = self.runHighPassFilter( trendRaster, "trend", addToGroup )
 				self.updateRasterDisplay( trendHighPassRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
+		else:
+			# otherwise generate raster from median-filtered values
+			newRaster = self.genRaster( field="medianValue", namePrefix="median" )
+			self.updateRasterDisplay( newRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
+			
+			# run high pass filter if required (default off)
+			if self.highPassFilter:
+				highPassRaster = self.runHighPassFilter( newRaster, "median", addToGroup )
+				self.updateRasterDisplay( highPassRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
 		
 		end = time.time()
 		print(f"TOTAL DURATION: {end - start:0.2f}s")
@@ -660,7 +670,7 @@ class QuickMag():
 		params = {'INPUT':vlayer,
 			'Z_FIELD':field,
 			'POWER':2,
-			'SMOOTHING':0.1,
+			'SMOOTHING':0.2,
 			'RADIUS':1.5,
 			'MAX_POINTS':30,
 			'MIN_POINTS':0,
