@@ -95,6 +95,7 @@ class QuickMag():
 		self.trendPercentile = 10		# default percentile to exclude from trend calculations
 		self.trendDegree = 2			# default nth degree for polynomial fit
 		self.highPassSize = 35			# default high pass filter size
+		self.movingMedianWindow = 3		# default window size for moving median calculation
 
 	# noinspection PyMethodMayBeStatic
 	def tr(self, message):
@@ -244,7 +245,7 @@ class QuickMag():
 			# substitute with your code.
 			pass
 	
-	# merge two or more 
+	# merge two or more ASC files
 	def mergeASCFiles(self):
 		import shlex
 		
@@ -295,8 +296,8 @@ class QuickMag():
 			print(f"TOTAL DURATION: {end - start:0.2f}s")
 			self.dlg.quickMagRasterProgressLabel.setText(f"Raster generated in: {end - start:0.2f}s")
 	
+	# create a QGIS layer group for processed results
 	def createLayerGroup(self, groupName=None):
-		# create layer group for results with temporary name
 		root = QgsProject.instance().layerTreeRoot()
 		self.layerGroup = root.addGroup( "Quickmag Output" )
 		
@@ -305,6 +306,7 @@ class QuickMag():
 		
 		self.layerGroup.setName( groupName )
 	
+	# apply high pass filter to an existing raster layer
 	def highPassSelectedRaster(self):
 		selectedLayer = self.dlg.quickMagHighPassLayerCombo.currentLayer()
 		if not selectedLayer:
@@ -423,7 +425,7 @@ class QuickMag():
 		# traceAndProbe -> (x, y)
 		lastCoords = {}
 
-		# function to check distance to last saved point.
+		# function to check distance to last saved point, and not keep points within a certain distance
 		def shouldKeepThisLine(reading):
 			traceAndProbe = getTraceAndProbe(reading)
 			x, y = reading[0], reading[1]
@@ -460,13 +462,12 @@ class QuickMag():
 		print("Implementing moving median corrections...")
 		# get moving median values along each line
 		movingMedianList = {}
-		movingMedianWindow = 5	# 5 points either side of the central point
 		
 		length = len( self.data )
 		for i, reading in enumerate(self.data):
 			currentTraceAndProbe = reading[5]
 			movingMedianList[currentTraceAndProbe] = []
-			for j in range(-movingMedianWindow, movingMedianWindow):
+			for j in range(-self.movingMedianWindow, self.movingMedianWindow):
 				# don't go beyond start or end of lines
 				if i + j < 0 or i + j >= length:
 					continue
