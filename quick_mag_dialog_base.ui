@@ -28,6 +28,9 @@
      <height>21</height>
     </rect>
    </property>
+   <property name="toolTip">
+    <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Path and filename for the ASC file to be processed. The format is expected to be that produced by Sensys magnetometry software packages; other formats will fail.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+   </property>
    <property name="filter">
     <string>Sensys (*.asc)</string>
    </property>
@@ -98,6 +101,9 @@
      <verstretch>0</verstretch>
     </sizepolicy>
    </property>
+   <property name="toolTip">
+    <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Path and filename for the ASC file to be processed. The format is expected to be that produced by Sensys magnetometry software packages; other formats will fail.&lt;/p&gt;&lt;p&gt;Rasters are generated using the GDAL inverse distance with nearest neighbour interpolation algorithm.&lt;/p&gt;&lt;p&gt;Generated rasters will be displayed at values of -3/+3 and from white to black.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+   </property>
    <property name="text">
     <string>Select an ASC file to process:</string>
    </property>
@@ -114,6 +120,9 @@
      <height>21</height>
     </rect>
    </property>
+   <property name="toolTip">
+    <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;A high pass filter is an image processing algorithm used to remove background trends while retaining finer details. The generated raster layer will not be altered: a copy will be generated with the high pass filter applied.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+   </property>
    <property name="text">
     <string>Generate high pass version with filter size:</string>
    </property>
@@ -129,6 +138,9 @@
      <width>311</width>
      <height>21</height>
     </rect>
+   </property>
+   <property name="toolTip">
+    <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;A trend filter is useful for removing gradient stripes along individual lines of the readings, presenting as shifts from black to white.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
    </property>
    <property name="text">
     <string>Apply trend filter with polynomial of nth degree:</string>
@@ -162,6 +174,9 @@
      <height>22</height>
     </rect>
    </property>
+   <property name="toolTip">
+    <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;The percentile value is used to exclude particularly high or low values when calculating the curve used in the trend filter (the nth top and bottom percentile). A higher number will exclude a wider range of values, which may be useful if there are extremely strong magnetic responses in your dataset. The trend filter will cause artifacts to appear along the line if such responses are included.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+   </property>
    <property name="minimum">
     <number>1</number>
    </property>
@@ -184,6 +199,9 @@
      <height>22</height>
     </rect>
    </property>
+   <property name="toolTip">
+    <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;The polynomial degree determines the complexity of the curve in readings being flattened, from a simple gradient (1) up to five rises and falls (10). Higher numbers may introduce artifacts into the resulting raster.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+   </property>
    <property name="maximum">
     <number>10</number>
    </property>
@@ -200,11 +218,14 @@
      <height>22</height>
     </rect>
    </property>
+   <property name="toolTip">
+    <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;The high pass filter size corresponds to the size of features that will be retained: a smaller filter size will retain smaller and narrower features, while removing larger trends. In practise, values from 25-55 appear to be most useful.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+   </property>
    <property name="minimum">
-    <number>15</number>
+    <number>5</number>
    </property>
    <property name="maximum">
-    <number>55</number>
+    <number>65</number>
    </property>
    <property name="singleStep">
     <number>10</number>
@@ -257,6 +278,9 @@
       <height>31</height>
      </rect>
     </property>
+    <property name="toolTip">
+     <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Path and filename for the output ASC file.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+    </property>
     <property name="text">
      <string>Output filename:</string>
     </property>
@@ -269,6 +293,9 @@
       <width>181</width>
       <height>31</height>
      </rect>
+    </property>
+    <property name="toolTip">
+     <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Path and filename for the output ASC file.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
     </property>
     <property name="filter">
      <string>Sensys (*.asc)</string>
@@ -285,6 +312,9 @@
       <width>311</width>
       <height>31</height>
      </rect>
+    </property>
+    <property name="toolTip">
+     <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Use Ctrl + click to select multiple files in the file dialog.&lt;/p&gt;&lt;p&gt;Any number of ASC files can be merged into a single file. This is intended to be used for surveys of a single location that have taken place over separate days and generated multiple export files, but may be useful for collating a number of small survey areas into a single file for ease of processing.&lt;/p&gt;&lt;p&gt;Note that raster generation time till increase according to the size of the ASC file being processed.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
     </property>
     <property name="layoutDirection">
      <enum>Qt::LeftToRight</enum>
@@ -336,6 +366,9 @@
       <height>21</height>
      </rect>
     </property>
+    <property name="toolTip">
+     <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Use Ctrl + click to select multiple files in the file dialog.&lt;/p&gt;&lt;p&gt;Any number of ASC files can be merged into a single file. This is intended to be used for surveys of a single location that have taken place over separate days and generated multiple export files, but may be useful for collating a number of small survey areas into a single file for ease of processing.&lt;/p&gt;&lt;p&gt;Note that raster generation time till increase according to the size of the ASC file being processed.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+    </property>
     <property name="text">
      <string>Select files to merge:</string>
     </property>
@@ -374,7 +407,7 @@
      <rect>
       <x>20</x>
       <y>10</y>
-      <width>251</width>
+      <width>311</width>
       <height>21</height>
      </rect>
     </property>
@@ -386,7 +419,7 @@
      </font>
     </property>
     <property name="text">
-     <string>Generate raster from points</string>
+     <string>Generate raster from points layer</string>
     </property>
    </widget>
    <widget class="QLabel" name="label_7">
@@ -444,6 +477,9 @@
       <height>31</height>
      </rect>
     </property>
+    <property name="toolTip">
+     <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Select a vector points layer from which to generate a new raster layer.&lt;/p&gt;&lt;p&gt;The points layer can be from any source so long as it has valid geometry and a suitable data field to interpolate.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+    </property>
     <property name="allowEmptyLayer">
      <bool>true</bool>
     </property>
@@ -456,6 +492,9 @@
       <width>151</width>
       <height>31</height>
      </rect>
+    </property>
+    <property name="toolTip">
+     <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Select the field in the layer that contains the data value to be interpolated into a raster.&lt;/p&gt;&lt;p&gt;For point layers generated by this plugin, that will be &amp;quot;medianValue&amp;quot; or &amp;quot;trendValue&amp;quot;.&lt;/p&gt;&lt;p&gt;For point layers generated by the AGT plugin, use &amp;quot;val_proces&amp;quot;.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
     </property>
    </widget>
    <widget class="QLabel" name="quickMagRasterProgressLabel">
@@ -492,7 +531,7 @@
      <rect>
       <x>20</x>
       <y>10</y>
-      <width>251</width>
+      <width>311</width>
       <height>21</height>
      </rect>
     </property>
@@ -504,7 +543,7 @@
      </font>
     </property>
     <property name="text">
-     <string>Run high pass filter on raster</string>
+     <string>Run high pass filter on raster layer</string>
     </property>
    </widget>
    <widget class="QLabel" name="label_16">
@@ -537,7 +576,7 @@
      </font>
     </property>
     <property name="text">
-     <string>Generate</string>
+     <string>Run</string>
     </property>
    </widget>
    <widget class="QLabel" name="label_17">
@@ -561,6 +600,9 @@
       <width>311</width>
       <height>31</height>
      </rect>
+    </property>
+    <property name="toolTip">
+     <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;A high pass filter is an image processing algorithm used to remove background trends while retaining finer details. The selected raster layer will not be altered: a copy will be generated with the high pass filter applied.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
     </property>
     <property name="allowEmptyLayer">
      <bool>true</bool>
@@ -587,6 +629,9 @@
       <width>71</width>
       <height>22</height>
      </rect>
+    </property>
+    <property name="toolTip">
+     <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;The high pass filter size corresponds to the size of features that will be retained: a smaller filter size will retain smaller and narrower features, while removing larger trends. In practise, values from 25-55 appear to be most useful.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
     </property>
     <property name="minimum">
      <number>15</number>

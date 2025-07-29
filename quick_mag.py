@@ -253,13 +253,16 @@ class QuickMag():
 		fileString = self.dlg.quickMagMergeFilesInput.filePath()
 		outputFile = self.dlg.quickMagMergeFilesOutput.filePath()
 		
-		if not fileString or not outputFile:
-			QMessageBox.warning(None, "Quick Mag Error", "Please select ASC files to merge and specifiy an output file")
+		if not fileString:
+			QMessageBox.warning(None, "Quick Mag Error", "Please select two or more ASC files to merge.")
+			return False
+		if not outputFile:
+			QMessageBox.warning(None, "Quick Mag Error", "Please specify an output filename.")
 			return False
 		
 		files = shlex.split(fileString)
 		if len(files) <= 1:
-			QMessageBox.warning(None, "Quick Mag Error", "Please select two or more ASC files to merge")
+			QMessageBox.warning(None, "Quick Mag Error", "Please select two or more ASC files to merge.")
 			return False
 				
 		with open(outputFile, 'w') as outfile:
@@ -281,7 +284,7 @@ class QuickMag():
 			
 			medianField = self.dlg.quickMagRasterFieldCombo.currentText()
 			if medianField is None:
-				QMessageBox.warning(None, "Quick Mag Error", "Please select a field to use for interpolation")
+				QMessageBox.warning(None, "Quick Mag Error", "Please select a field to use for interpolation.")
 				return False
 			
 			self.layerName = selectedLayer.name()
@@ -300,6 +303,9 @@ class QuickMag():
 			end = time.time()
 			print(f"TOTAL DURATION: {end - start:0.2f}s")
 			self.dlg.quickMagRasterProgressLabel.setText(f"Raster generated in: {end - start:0.2f}s")
+		else:
+			QMessageBox.warning(None, "Quick Mag Error", "Please select a layer and data field to interpolate a raster from.")
+			return False
 	
 	# create a QGIS layer group for processed results
 	def createLayerGroup(self, groupName=None):
@@ -315,7 +321,7 @@ class QuickMag():
 	def highPassSelectedRaster(self):
 		selectedLayer = self.dlg.quickMagHighPassLayerCombo.currentLayer()
 		if not selectedLayer:
-			QMessageBox.warning(None, "Quick Mag Error", "Please select a raster layer to run a high pass filter on")
+			QMessageBox.warning(None, "Quick Mag Error", "Please select a raster layer to run a high pass filter on.")
 			return False
 				
 		self.layerName = selectedLayer.name()
@@ -335,11 +341,9 @@ class QuickMag():
 	def processASC(self):
 		start = time.time()
 		
-		medianField = "medianValue"
-		
 		self.filepath = self.dlg.quickMagFileInput.filePath()
 		if not self.filepath:
-			QMessageBox.warning(None, "Quick Mag Error", "Please select an ASC file to process")
+			QMessageBox.warning(None, "Quick Mag Error", "Please select an ASC file to process.")
 			return False
 		
 		# split out input ASC filename and combine with date time for group and layer names
@@ -563,7 +567,7 @@ class QuickMag():
 		
 		# generate vector point layer
 		start = time.time()
-		print("Creating point layer...")
+		print("Creating vector point layer...")
 		# get project CRS
 		crsProj = QgsCoordinateReferenceSystem(QgsProject.instance().crs().authid())
 		
@@ -584,15 +588,11 @@ class QuickMag():
 			QgsField("trendValue", QMetaType.Type.Double)
 			])
 		vlayer.updateFields()
-		end = time.time()
-		print(f"Duration: {end - start:0.2f}s")
 		
 		# set up transform from UTM to project CRS
 		self.crsASC = QgsCoordinateReferenceSystem(f"EPSG:{self.utmCode}")
 		self.crsTransform = QgsCoordinateTransform(self.crsASC, crsProj, QgsProject.instance())
 		
-		start = time.time()
-		print("Generating vector points...")
 		# loop through data and create vector point for each row
 		for reading in self.data:
 			# create vector point
@@ -650,8 +650,8 @@ class QuickMag():
 		
 		# theoretically we can use the currently selected layer
 		if self.layerName is None:
+			QMessageBox.warning(None, "Quick Mag Error", "Error generating raster: source vector points layer not found.")
 			return False
-			vlayer = self.iface.layerTreeView().currentLayer() # grabs currently selected layer
 		else:
 			vlayer = QgsProject.instance().mapLayersByName(self.layerName)[0]
 		
@@ -717,7 +717,8 @@ class QuickMag():
 	# change raster display to fit in min/max values
 	def updateRasterDisplay( self, layer = None, newMin = -3.0, newMax = 3.0 ):
 		if not layer:
-			layer = iface.layerTreeView().currentLayer()
+			QMessageBox.warning(None, "Quick Mag Error", "Error updating raster layer display: layer not found.")
+			return False
 		
 		renderer = QgsSingleBandGrayRenderer(layer.dataProvider(), 1)
 		ce = QgsContrastEnhancement(layer.dataProvider().dataType(0))
@@ -738,7 +739,7 @@ class QuickMag():
 	# use Whitebox Workflows high pass median filter
 	def runHighPassFilter( self, layer = None, namePrefix = '', groupExists = False ):
 		if not layer:
-			QMessageBox.warning(None, "Quick Mag Error", "Please select a layer to run a high pass filter on")
+			QMessageBox.warning(None, "Quick Mag Error", "Error applying high pass filter: layer not found.")
 			return False
 		
 		start = time.time()
