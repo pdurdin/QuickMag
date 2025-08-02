@@ -36,6 +36,8 @@ import os.path
 
 from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsGeometry, QgsPointXY
 from qgis.core import QgsProject, QgsVectorLayer, QgsField, QgsFeature, QgsRasterLayer, QgsSingleBandGrayRenderer, QgsContrastEnhancement, QgsVectorFileWriter, QgsProcessingUtils
+from osgeo import gdal
+from qgis.core import QgsProcessingParameterRasterDestination, QgsRasterPipe, QgsRasterFileWriter
 from qgis.PyQt.QtCore import QVariant, QMetaType
 
 from math import sqrt
@@ -326,16 +328,41 @@ class QuickMag():
 				
 		self.layerName = selectedLayer.name()
 		rasterLayer = QgsProject.instance().mapLayersByName(self.layerName)[0]
-
+		
 		self.highPassSize = self.dlg.quickMagHighPassFilterSize.value()
 		if self.highPassSize % 2 == 0:
 			self.highPassSize -= 1
 		
 		addToGroup = False
-		highPassRaster = self.runHighPassFilter( rasterLayer, "", addToGroup )
+		
+		dataset = gdal.Open(rasterLayer.dataProvider().dataSourceUri(), gdal.GA_ReadOnly)
+		if dataset.GetDriver().ShortName == "GPKG":
+			# have to save the layer as a temporary TIF because Whitebox Workflows won't work with geopackaged rasters
+			dest = QgsProcessingParameterRasterDestination(name="highPassTemp")
+			tempPath = dest.generateTemporaryDestination()
+			
+			pipe = QgsRasterPipe()
+			pipe.set(rasterLayer.dataProvider().clone())
+
+			file_writer = QgsRasterFileWriter(tempPath)
+			file_writer.writeRaster(pipe, rasterLayer.width(), rasterLayer.height(), rasterLayer.extent(), rasterLayer.crs())
+		
+			highPassRaster = self.runHighPassFilter( tempPath, "", addToGroup )
+		else:
+			highPassRaster = self.runHighPassFilter( rasterLayer, "", addToGroup )
+			
 		self.updateRasterDisplay( highPassRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
 		
 		self.dlg.quickMagHighPassProgressLabel.setText(f"High pass filter applied to {self.layerName}")
+	
+	def testSource():
+		from osgeo import gdal
+		
+		layer = iface.activeLayer()
+		dataset = gdal.Open(layer.dataProvider().dataSourceUri(), gdal.GA_ReadOnly)
+
+		print(dataset.GetDriver().ShortName)
+		print(dataset.GetDriver().LongName)
 	
 	# load and process a full ASC file from scratch
 	def processASC(self):
@@ -392,6 +419,11 @@ class QuickMag():
 		end = time.time()
 		print(f"TOTAL DURATION: {end - start:0.2f}s")
 		self.dlg.quickMagProgressLabel.setText(f"ASC processed and raster generated in: {end - start:0.2f}s")
+		
+		# set these values back to default
+		self.trendRemoval = False
+		self.highPassFilter = False
+		
 	
 	# load ASC file, perform median/trend calculations and generate vector points layer with modified values
 	def loadASC(self):
