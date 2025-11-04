@@ -36,7 +36,7 @@ import os.path
 
 from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsGeometry, QgsPointXY
 from qgis.core import QgsProject, QgsVectorLayer, QgsField, QgsFeature, QgsRasterLayer, QgsSingleBandGrayRenderer, QgsContrastEnhancement, QgsVectorFileWriter, QgsProcessingUtils
-from osgeo import gdal
+from osgeo import gdal, osr
 from qgis.core import QgsProcessingParameterRasterDestination, QgsRasterPipe, QgsRasterFileWriter
 from qgis.PyQt.QtCore import QVariant, QMetaType
 
@@ -49,7 +49,7 @@ import statistics
 import processing
 
 from numpy.polynomial.polynomial import polyfit, polyval
-from numpy import percentile
+from numpy import percentile, array
 
 class QuickMag():
 	"""QGIS Plugin Implementation."""
@@ -354,15 +354,7 @@ class QuickMag():
 		self.updateRasterDisplay( highPassRaster, -self.defaultDisplayRange, self.defaultDisplayRange )
 		
 		self.dlg.quickMagHighPassProgressLabel.setText(f"High pass filter applied to {self.layerName}")
-	
-	def testSource():
-		from osgeo import gdal
-		
-		layer = iface.activeLayer()
-		dataset = gdal.Open(layer.dataProvider().dataSourceUri(), gdal.GA_ReadOnly)
 
-		print(dataset.GetDriver().ShortName)
-		print(dataset.GetDriver().LongName)
 	
 	# load and process a full ASC file from scratch
 	def processASC(self):
@@ -801,5 +793,4 @@ class QuickMag():
 		print(f"Duration: {end - start:0.2f}s")
 		
 		return rasterLayer
-		
 		
