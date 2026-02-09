@@ -681,14 +681,14 @@ class QuickMag():
 		
 		# get points layer extent to allow raster resolution calculation
 		ext = vlayer.extent()
-		xmin = ext.xMinimum()
-		xmax = ext.xMaximum()
-		ymin = ext.yMinimum()
-		ymax = ext.yMaximum()
+		xmin = ext.xMinimum() - 0.5
+		xmax = ext.xMaximum() + 0.5
+		ymin = ext.yMinimum() - 0.5
+		ymax = ext.yMaximum() + 0.5
 		
 		# set raster extent and cell size at 0.125 x 0.125m
 		extraOpt = "-tr 0.125 0.125 -txe " + str(xmin) + " " + str(xmax) + " -tye " + str(ymin) + " " + str(ymax)
-		
+				
 		# use IDW interpolation for quick raster generation
 		alg = "gdal:gridinversedistancenearestneighbor"
 		params = {'INPUT':vlayer,
